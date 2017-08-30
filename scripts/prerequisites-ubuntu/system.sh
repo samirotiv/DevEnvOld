@@ -1,4 +1,4 @@
-apt-get install software-properties-common make gcc -y
+apt-get install software-properties-common -y
 apt-get install openssh-server -y
 apt-get install tmux bmon silversearcher-ag -y
 
