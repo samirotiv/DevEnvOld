@@ -1,3 +1,3 @@
-sudo apt-add-repository ppa:git-core/ppa
-sudo apt-get update
-sudo apt-get install git tig -y
+apt-add-repository ppa:git-core/ppa
+apt-get update
+apt-get install git tig -y

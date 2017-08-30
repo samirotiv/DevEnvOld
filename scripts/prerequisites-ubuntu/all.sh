@@ -1,4 +1,4 @@
-bash ./system.sh
-bash ./git.sh
-bash ./python.sh
-bash ./nodejs.sh
+./system.sh
+./git.sh
+./python.sh
+./nodejs.sh
