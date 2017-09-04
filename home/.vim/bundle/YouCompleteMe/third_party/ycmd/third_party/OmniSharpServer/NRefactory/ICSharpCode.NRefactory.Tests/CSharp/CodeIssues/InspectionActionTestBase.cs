@@ -121,11 +121,11 @@ namespace ICSharpCode.NRefactory.CSharp.CodeIssues
 			Assert.AreEqual (issueCount, issues.Count);
 		}
 
-		protected static void Test<T> (string input, string output, int fixIndex = 0, bool expectErrors = false)
+		protected static void Test<T> (string input, string output, int fixIndex = 0)
 			where T : CodeIssueProvider, new ()
 		{
 			TestRefactoringContext context;
-			var issues = GetIssues (new T (), input, out context, expectErrors);
+			var issues = GetIssues (new T (), input, out context);
 			if (issues.Count == 0)
 				Console.WriteLine("No issues in:\n" + input);
 			Assert.AreEqual (1, issues.Count);

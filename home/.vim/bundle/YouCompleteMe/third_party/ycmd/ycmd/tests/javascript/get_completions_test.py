@@ -19,7 +19,8 @@ from __future__ import print_function
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import division
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 from hamcrest import ( assert_that, contains, contains_inanyorder, empty,
@@ -28,10 +29,8 @@ from nose.tools import eq_
 from pprint import pformat
 import requests
 
-from ycmd.tests.javascript import ( PathToTestFile, SharedYcmd,
-                                    IsolatedYcmdInDirectory )
-from ycmd.tests.test_utils import ( BuildRequest, CompletionEntryMatcher,
-                                    WaitUntilCompleterServerReady )
+from ycmd.tests.javascript import PathToTestFile, SharedYcmd
+from ycmd.tests.test_utils import BuildRequest, CompletionEntryMatcher
 from ycmd.utils import ReadFile
 
 # The following properties/methods are in Object.prototype, so are present
@@ -478,31 +477,6 @@ def GetCompletions_Unicode_InFile_test( app ):
           CompletionEntryMatcher( 'charCodeAt', 'fn(i: number) -> number' ),
         ),
         'completion_start_column': 13,
-        'errors': empty(),
-      } )
-    },
-  } )
-
-
-@IsolatedYcmdInDirectory( PathToTestFile( 'node' ) )
-def GetCompletions_ChangeStartColumn_test( app ):
-  WaitUntilCompleterServerReady( app, 'javascript' )
-  RunTest( app, {
-    'description': 'the completion_start_column is updated by tern',
-    'request': {
-      'filetype'      : 'javascript',
-      'filepath'      : PathToTestFile( 'node', 'node_test.js' ),
-      'line_num'      : 1,
-      'column_num'    : 17,
-      'force_semantic': True,
-    },
-    'expect': {
-      'response': requests.codes.ok,
-      'data': has_entries( {
-        'completions': contains(
-          CompletionEntryMatcher( '"path"', 'path' )
-        ),
-        'completion_start_column': 14,
         'errors': empty(),
       } )
     },

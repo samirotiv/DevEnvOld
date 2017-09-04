@@ -19,34 +19,21 @@ releases of python.
     print(response.content)
 
 """
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from functools import partial
-from pickle import dumps, PickleError
 
+from concurrent.futures import ThreadPoolExecutor
 from requests import Session
 from requests.adapters import DEFAULT_POOLSIZE, HTTPAdapter
 
-
-def wrap(self, sup, background_callback, *args_, **kwargs_):
-    """ A global top-level is required for ProcessPoolExecutor """
-    resp = sup(*args_, **kwargs_)
-    return background_callback(self, resp) or resp
-
-
-PICKLE_ERROR = ('Cannot pickle function. Refer to documentation: https://'
-                'github.com/ross/requests-futures/#using-processpoolexecutor')
-
-
 class FuturesSession(Session):
 
-    def __init__(self, executor=None, max_workers=2, session=None, *args,
-                 **kwargs):
+    def __init__(self, executor=None, max_workers=2, *args, **kwargs):
         """Creates a FuturesSession
 
         Notes
         ~~~~~
-        * `ProcessPoolExecutor` may be used with Python > 3.4;
-          see README for more information.
+
+        * ProcessPoolExecutor is not supported b/c Response objects are
+          not picklable.
 
         * If you provide both `executor` and `max_workers`, the latter is
           ignored and provided executor is used as is.
@@ -62,7 +49,6 @@ class FuturesSession(Session):
                 self.mount('http://', HTTPAdapter(**adapter_kwargs))
 
         self.executor = executor
-        self.session = session
 
     def request(self, *args, **kwargs):
         """Maintains the existing api for Session.request.
@@ -73,27 +59,15 @@ class FuturesSession(Session):
         response in the background, e.g. call resp.json() so that json parsing
         happens in the background thread.
         """
-        if self.session:
-            func = self.session.request
-        else:
-            # avoid calling super to not break pickled method
-            func = partial(Session.request, self)
+        func = sup = super(FuturesSession, self).request
 
         background_callback = kwargs.pop('background_callback', None)
         if background_callback:
-            func = partial(wrap, self, func, background_callback)
+            def wrap(*args_, **kwargs_):
+                resp = sup(*args_, **kwargs_)
+                background_callback(self, resp)
+                return resp
 
-        if isinstance(self.executor, ProcessPoolExecutor):
-            # verify function can be pickled
-            try:
-                dumps(func)
-            except (TypeError, PickleError):
-                raise RuntimeError(PICKLE_ERROR)
+            func = wrap
 
         return self.executor.submit(func, *args, **kwargs)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.executor.shutdown()

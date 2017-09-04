@@ -21,7 +21,8 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 import os
@@ -30,8 +31,7 @@ from nose.tools import eq_, ok_
 from ycmd.completers.general.filename_completer import FilenameCompleter
 from ycmd.request_wrap import RequestWrap
 from ycmd import user_options_store
-from ycmd.tests import IsolatedYcmd
-from ycmd.tests.test_utils import CurrentWorkingDirectory
+from ycmd.tests.test_utils import CurrentWorkingDirectory, UserOption
 from ycmd.utils import GetCurrentDirectory, ToBytes
 
 TEST_DIR = os.path.dirname( os.path.abspath( __file__ ) )
@@ -337,70 +337,69 @@ class FilenameCompleter_test( object ):
                                       ( '∂†∫', '[Dir]' )  ) )
 
 
-@IsolatedYcmd( { 'filepath_completion_use_working_dir': 0 } )
-def WorkingDir_UseFilePath_test( app ):
+def WorkingDir_UseFilePath_test():
   ok_( GetCurrentDirectory() != DATA_DIR, ( 'Please run this test from a '
                                             'different directory' ) )
 
-  completer = FilenameCompleter( user_options_store.GetAll() )
+  with UserOption( 'filepath_completion_use_working_dir', 0 ) as options:
+    completer = FilenameCompleter( options )
 
-  data = sorted( _CompletionResultsForLine( completer, 'ls ./include/' ) )
-  eq_( [
-    ( 'Qt',    '[Dir]' ),
-    ( 'QtGui', '[Dir]' )
-  ], data )
-
-
-
-@IsolatedYcmd( { 'filepath_completion_use_working_dir': 1 } )
-def WorkingDir_UseServerWorkingDirectory_test( app ):
-  test_dir = os.path.join( DATA_DIR, 'include' )
-  with CurrentWorkingDirectory( test_dir ) as old_current_dir:
-    ok_( old_current_dir != test_dir, ( 'Please run this test from a different '
-                                        'directory' ) )
-
-    completer = FilenameCompleter( user_options_store.GetAll() )
-
-    # We don't supply working_dir in the request, so the current working
-    # directory is used.
-    data = sorted( _CompletionResultsForLine( completer, 'ls ./' ) )
+    data = sorted( _CompletionResultsForLine( completer, 'ls ./include/' ) )
     eq_( [
       ( 'Qt',    '[Dir]' ),
       ( 'QtGui', '[Dir]' )
     ], data )
 
 
-@IsolatedYcmd( { 'filepath_completion_use_working_dir': 1 } )
-def WorkingDir_UseServerWorkingDirectory_Unicode_test( app ):
+def WorkingDir_UseServerWorkingDirectory_test():
+  test_dir = os.path.join( DATA_DIR, 'include' )
+  with CurrentWorkingDirectory( test_dir ) as old_current_dir:
+    ok_( old_current_dir != test_dir, ( 'Please run this test from a different '
+                                        'directory' ) )
+
+    with UserOption( 'filepath_completion_use_working_dir', 1 ) as options:
+      completer = FilenameCompleter( options )
+
+      # We don't supply working_dir in the request, so the current working
+      # directory is used.
+      data = sorted( _CompletionResultsForLine( completer, 'ls ./' ) )
+      eq_( [
+        ( 'Qt',    '[Dir]' ),
+        ( 'QtGui', '[Dir]' )
+      ], data )
+
+
+def WorkingDir_UseServerWorkingDirectory_Unicode_test():
   test_dir = os.path.join( TEST_DIR, 'testdata', 'filename_completer', '∂†∫' )
   with CurrentWorkingDirectory( test_dir ) as old_current_dir:
     ok_( old_current_dir != test_dir, ( 'Please run this test from a different '
                                         'directory' ) )
 
-    completer = FilenameCompleter( user_options_store.GetAll() )
+    with UserOption( 'filepath_completion_use_working_dir', 1 ) as options:
+      completer = FilenameCompleter( options )
 
-    # We don't supply working_dir in the request, so the current working
-    # directory is used.
-    data = sorted( _CompletionResultsForLine( completer, 'ls ./' ) )
-    eq_( [
-      ( '†es†.txt', '[File]' )
-    ], data )
+      # We don't supply working_dir in the request, so the current working
+      # directory is used.
+      data = sorted( _CompletionResultsForLine( completer, 'ls ./' ) )
+      eq_( [
+        ( '†es†.txt', '[File]' )
+      ], data )
 
 
-@IsolatedYcmd( { 'filepath_completion_use_working_dir': 1 } )
-def WorkingDir_UseClientWorkingDirectory_test( app ):
+def WorkingDir_UseClientWorkingDirectory_test():
   test_dir = os.path.join( DATA_DIR, 'include' )
   ok_( GetCurrentDirectory() != test_dir, ( 'Please run this test from a '
                                             'different directory' ) )
 
-  completer = FilenameCompleter( user_options_store.GetAll() )
+  with UserOption( 'filepath_completion_use_working_dir', 1 ) as options:
+    completer = FilenameCompleter( options )
 
-  # We supply working_dir in the request, so we expect results to be
-  # relative to the supplied path.
-  data = sorted( _CompletionResultsForLine( completer, 'ls ./', {
-    'working_dir': test_dir
-  } ) )
-  eq_( [
-    ( 'Qt',    '[Dir]' ),
-    ( 'QtGui', '[Dir]' )
-  ], data )
+    # We supply working_dir in the request, so we expect results to be
+    # relative to the supplied path.
+    data = sorted( _CompletionResultsForLine( completer, 'ls ./', {
+      'working_dir': test_dir
+    } ) )
+    eq_( [
+      ( 'Qt',    '[Dir]' ),
+      ( 'QtGui', '[Dir]' )
+    ], data )

@@ -20,11 +20,13 @@
 #include "Candidate.h"
 #include "CandidateRepository.h"
 #include "ReleaseGil.h"
-#include "Utils.h"
 
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/cxx11/any_of.hpp>
 #include <vector>
-#include <utility>
 
+using boost::algorithm::any_of;
+using boost::algorithm::is_upper;
 using boost::python::len;
 using boost::python::str;
 using boost::python::extract;
@@ -65,6 +67,9 @@ boost::python::list FilterAndSortCandidates(
   const std::string &query ) {
   pylist filtered_candidates;
 
+  if ( query.empty() )
+    return candidates;
+
   if ( !IsPrintable( query ) )
     return boost::python::list();
 
@@ -76,13 +81,12 @@ boost::python::list FilterAndSortCandidates(
   {
     ReleaseGil unlock;
     Bitset query_bitset = LetterBitsetFromString( query );
-    bool query_has_uppercase_letters = HasUppercase( query );
+    bool query_has_uppercase_letters = any_of( query, is_upper() );
 
     for ( int i = 0; i < num_candidates; ++i ) {
       const Candidate *candidate = repository_candidates[ i ];
 
-      if ( candidate->Text().empty() ||
-           !candidate->MatchesQueryBitset( query_bitset ) )
+      if ( !candidate->MatchesQueryBitset( query_bitset ) )
         continue;
 
       Result result = candidate->QueryMatchResult( query,
@@ -90,7 +94,7 @@ boost::python::list FilterAndSortCandidates(
 
       if ( result.IsSubsequence() ) {
         ResultAnd< int > result_and_object( result, i );
-        result_and_objects.push_back( std::move( result_and_object ) );
+        result_and_objects.push_back( boost::move( result_and_object ) );
       }
     }
 
@@ -105,38 +109,13 @@ boost::python::list FilterAndSortCandidates(
 }
 
 
-std::string GetUtf8String( const boost::python::object &value ) {
-#if PY_MAJOR_VERSION >= 3
-  // While strings are internally represented in UCS-2 or UCS-4 on Python 3,
-  // they are UTF-8 encoded when converted to std::string.
-  extract< std::string > to_string( value );
+std::string GetUtf8String( const boost::python::object &string_or_unicode ) {
+  extract< std::string > to_string( string_or_unicode );
 
   if ( to_string.check() )
     return to_string();
-#else
-  std::string type = extract< std::string >( value.attr( "__class__" )
-                                                  .attr( "__name__" ) );
 
-  if ( type == "str" )
-    return extract< std::string >( value );
-
-  if ( type == "unicode" )
-    // unicode -> str
-    return extract< std::string >( value.attr( "encode" )( "utf8" ) );
-
-  // newstr and newbytes have a __native__ method that convert them
-  // respectively to unicode and str.
-  if ( type == "newstr" )
-    // newstr -> unicode -> str
-    return extract< std::string >( value.attr( "__native__" )()
-                                        .attr( "encode" )( "utf8" ) );
-
-  if ( type == "newbytes" )
-    // newbytes -> str
-    return extract< std::string >( value.attr( "__native__" )() );
-#endif
-
-  return extract< std::string >( str( value ).encode( "utf8" ) );
+  return extract< std::string >( str( string_or_unicode ).encode( "utf8" ) );
 }
 
 } // namespace YouCompleteMe

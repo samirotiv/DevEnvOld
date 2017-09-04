@@ -72,7 +72,7 @@ namespace ICSharpCode.NRefactory.Semantics
 		{
 			switch (member.SymbolKind) {
 				case SymbolKind.Constructor:
-					return member.DeclaringType ?? SpecialType.UnknownType;
+					return member.DeclaringType;
 				case SymbolKind.Field:
 					if (((IField)member).IsFixed)
 						return new PointerType(member.ReturnType);

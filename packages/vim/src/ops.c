@@ -396,10 +396,7 @@ shift_block(oparg_T *oap, int amount)
 	return;
 
     /* total is number of screen columns to be inserted/removed */
-    total = (int)((unsigned)amount * (unsigned)p_sw);
-    if ((total / p_sw) != amount)
-	return; /* multiplication overflow */
-
+    total = amount * p_sw;
     oldp = ml_get_curline();
 
     if (!left)
@@ -3170,29 +3167,19 @@ op_yank(oparg_T *oap, int deleting, int mess)
 	/* Some versions of Vi use ">=" here, some don't...  */
 	if (yanklines > p_report)
 	{
-	    char namebuf[100];
-
-	    if (oap->regname == NUL)
-		*namebuf = NUL;
-	    else
-		vim_snprintf(namebuf, sizeof(namebuf),
-						_(" into \"%c"), oap->regname);
-
 	    /* redisplay now, so message is not deleted */
 	    update_topline_redraw();
 	    if (yanklines == 1)
 	    {
 		if (oap->block_mode)
-		    smsg((char_u *)_("block of 1 line yanked%s"), namebuf);
+		    MSG(_("block of 1 line yanked"));
 		else
-		    smsg((char_u *)_("1 line yanked%s"), namebuf);
+		    MSG(_("1 line yanked"));
 	    }
 	    else if (oap->block_mode)
-		smsg((char_u *)_("block of %ld lines yanked%s"),
-		     yanklines, namebuf);
+		smsg((char_u *)_("block of %ld lines yanked"), yanklines);
 	    else
-		smsg((char_u *)_("%ld lines yanked%s"), yanklines,
-		     namebuf);
+		smsg((char_u *)_("%ld lines yanked"), yanklines);
 	}
     }
 

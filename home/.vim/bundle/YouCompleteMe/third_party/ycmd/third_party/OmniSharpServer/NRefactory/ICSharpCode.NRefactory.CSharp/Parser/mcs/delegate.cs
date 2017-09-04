@@ -23,7 +23,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	//
 	// Delegate container implementation
@@ -294,9 +294,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 		public override void PrepareEmit ()
 		{
-			if ((caching_flags & Flags.CloseTypeCreated) != 0)
-				return;
-
 			if (!Parameters.IsEmpty) {
 				parameters.ResolveDefaultValues (this);
 			}
@@ -442,7 +439,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 	//
 	public abstract class DelegateCreation : Expression, OverloadResolver.IErrorHandler
 	{
-		bool conditional_access_receiver;
 		protected MethodSpec constructor_method;
 		protected MethodGroupExpr method_group;
 
@@ -450,8 +446,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 		public override bool ContainsEmitWithAwait ()
 		{
-			var instance = method_group.InstanceExpression;
-			return instance != null && instance.ContainsEmitWithAwait ();
+			return false;
 		}
 
 		public static Arguments CreateDelegateMethodArguments (ResolveContext rc, AParametersCollection pd, TypeSpec[] types, Location loc)
@@ -511,19 +506,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 			var invoke_method = Delegate.GetInvokeMethod (type);
 
-			if (!ec.HasSet (ResolveContext.Options.ConditionalAccessReceiver)) {
-				if (method_group.HasConditionalAccess ()) {
-					conditional_access_receiver = true;
-					ec.Set (ResolveContext.Options.ConditionalAccessReceiver);
-				}
-			}
-
 			Arguments arguments = CreateDelegateMethodArguments (ec, invoke_method.Parameters, invoke_method.Parameters.Types, loc);
 			method_group = method_group.OverloadResolve (ec, ref arguments, this, OverloadResolver.Restrictions.CovariantDelegate);
-
-			if (conditional_access_receiver)
-				ec.With (ResolveContext.Options.ConditionalAccessReceiver, false);
-
 			if (method_group == null)
 				return null;
 
@@ -579,15 +563,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		
 		public override void Emit (EmitContext ec)
 		{
-			if (conditional_access_receiver)
-				ec.ConditionalAccess = new ConditionalAccessContext (type, ec.DefineLabel ());
-
-			if (method_group.InstanceExpression == null) {
+			if (method_group.InstanceExpression == null)
 				ec.EmitNull ();
-			} else {
-				var ie = new InstanceEmitter (method_group.InstanceExpression, false);
-				ie.Emit (ec, method_group.ConditionalAccess);
-			}
+			else
+				method_group.InstanceExpression.Emit (ec);
 
 			var delegate_method = method_group.BestCandidate;
 
@@ -600,18 +579,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			}
 
 			ec.Emit (OpCodes.Newobj, constructor_method);
-
-			if (conditional_access_receiver)
-				ec.CloseConditionalAccess (null);
-		}
-
-		public override void FlowAnalysis (FlowAnalysisContext fc)
-		{
-			base.FlowAnalysis (fc);
-			method_group.FlowAnalysis (fc);
-
-			if (conditional_access_receiver)
-				fc.ConditionalAccessEnd ();
 		}
 
 		void Error_ConversionFailed (ResolveContext ec, MethodSpec method, Expression return_type)
@@ -649,8 +616,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			var invoke = Delegate.GetInvokeMethod (target_type);
 
 			Arguments arguments = CreateDelegateMethodArguments (ec, invoke.Parameters, invoke.Parameters.Types, mg.Location);
-			mg = mg.OverloadResolve (ec, ref arguments, null, OverloadResolver.Restrictions.CovariantDelegate | OverloadResolver.Restrictions.ProbingOnly);
-			return mg != null && Delegate.IsTypeCovariant (ec, mg.BestCandidateReturnType, invoke.ReturnType);
+			return mg.OverloadResolve (ec, ref arguments, null, OverloadResolver.Restrictions.CovariantDelegate | OverloadResolver.Restrictions.ProbingOnly) != null;
 		}
 
 		#region IErrorHandler Members
@@ -858,15 +824,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 	class DelegateInvocation : ExpressionStatement
 	{
 		readonly Expression InstanceExpr;
-		readonly bool conditionalAccessReceiver;
 		Arguments arguments;
 		MethodSpec method;
 		
-		public DelegateInvocation (Expression instance_expr, Arguments args, bool conditionalAccessReceiver, Location loc)
+		public DelegateInvocation (Expression instance_expr, Arguments args, Location loc)
 		{
 			this.InstanceExpr = instance_expr;
 			this.arguments = args;
-			this.conditionalAccessReceiver = conditionalAccessReceiver;
 			this.loc = loc;
 		}
 
@@ -907,45 +871,29 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				return null;
 
 			type = method.ReturnType;
-			if (conditionalAccessReceiver)
-				type = LiftMemberType (ec, type);
-
 			eclass = ExprClass.Value;
 			return this;
 		}
 
 		public override void Emit (EmitContext ec)
 		{
-			if (conditionalAccessReceiver) {
-				ec.ConditionalAccess = new ConditionalAccessContext (type, ec.DefineLabel ());
-			}
-
 			//
 			// Invocation on delegates call the virtual Invoke member
 			// so we are always `instance' calls
 			//
 			var call = new CallEmitter ();
 			call.InstanceExpression = InstanceExpr;
-			call.Emit (ec, method, arguments, loc);
-
-			if (conditionalAccessReceiver)
-				ec.CloseConditionalAccess (type.IsNullableType && type !=  method.ReturnType ? type : null);
+			call.EmitPredefined (ec, method, arguments, loc);
 		}
 
 		public override void EmitStatement (EmitContext ec)
 		{
-			if (conditionalAccessReceiver) {
-				ec.ConditionalAccess = new ConditionalAccessContext (type, ec.DefineLabel ()) {
-					Statement = true
-				};
-			}
-
-			var call = new CallEmitter ();
-			call.InstanceExpression = InstanceExpr;
-			call.EmitStatement (ec, method, arguments, loc);
-
-			if (conditionalAccessReceiver)
-				ec.CloseConditionalAccess (null);
+			Emit (ec);
+			// 
+			// Pop the return value if there is one
+			//
+			if (type.Kind != MemberKind.Void)
+				ec.Emit (OpCodes.Pop);
 		}
 
 		public override System.Linq.Expressions.Expression MakeExpression (BuilderContext ctx)

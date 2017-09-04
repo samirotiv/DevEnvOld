@@ -39,6 +39,13 @@ pushd $PREFIX || exit 1
 
     echo "Installing distribute and pip..."
     hash -r
+    wget -N -O $PREFIX/distribute_setup.py \
+      http://python-distribute.org/distribute_setup.py || exit 1
+
+    $PREFIX/bin/python$VERSION $PREFIX/distribute_setup.py || exit 1
+    if [ $VERSION = "2.5" ]; then
+        $PREFIX/bin/easy_install-$VERSION simplejson || exit 1
+    fi
 
   popd
 

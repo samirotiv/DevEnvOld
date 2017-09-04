@@ -23,6 +23,8 @@
 #include "Utils.h"
 #include "ReleaseGil.h"
 
+#include <algorithm>
+
 namespace YouCompleteMe {
 
 

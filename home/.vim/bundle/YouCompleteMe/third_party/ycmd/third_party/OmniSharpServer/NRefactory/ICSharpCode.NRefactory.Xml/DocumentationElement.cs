@@ -39,8 +39,6 @@ namespace ICSharpCode.NRefactory.Xml
 		/// </summary>
 		public static XmlDocumentationElement Get(IEntity entity, bool inheritDocIfMissing = true)
 		{
-			if (entity == null)
-				return null;
 			var documentationComment = entity.Documentation;
 			if (documentationComment != null) {
 				return Create(documentationComment, entity);

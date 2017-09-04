@@ -1183,7 +1183,6 @@ timer_callback(timer_T *timer)
 /*
  * Call timers that are due.
  * Return the time in msec until the next timer is due.
- * Returns -1 if there are no pending timers.
  */
     long
 check_due_timer(void)
@@ -1194,17 +1193,10 @@ check_due_timer(void)
     long	next_due = -1;
     proftime_T	now;
     int		did_one = FALSE;
-    int		need_update_screen = FALSE;
     long	current_id = last_timer_id;
 # ifdef WIN3264
     LARGE_INTEGER   fr;
-# endif
 
-    /* Don't run any timers while exiting or dealing with an error. */
-    if (exiting || aborting())
-	return next_due;
-
-# ifdef WIN3264
     QueryPerformanceFrequency(&fr);
 # endif
     profile_start(&now);
@@ -1219,15 +1211,9 @@ check_due_timer(void)
 	{
 	    int save_timer_busy = timer_busy;
 	    int save_vgetc_busy = vgetc_busy;
-	    int did_emsg_save = did_emsg;
-	    int called_emsg_save = called_emsg;
-	    int did_throw_save = did_throw;
-	    int	save_must_redraw = must_redraw;
 
 	    timer_busy = timer_busy > 0 || vgetc_busy > 0;
 	    vgetc_busy = 0;
-	    called_emsg = FALSE;
-	    must_redraw = 0;
 	    timer->tr_firing = TRUE;
 	    timer_callback(timer);
 	    timer->tr_firing = FALSE;
@@ -1235,23 +1221,10 @@ check_due_timer(void)
 	    did_one = TRUE;
 	    timer_busy = save_timer_busy;
 	    vgetc_busy = save_vgetc_busy;
-	    if (called_emsg)
-	    {
-		++timer->tr_emsg_count;
-		if (!did_throw_save && did_throw && current_exception != NULL)
-		    discard_current_exception();
-	    }
-	    did_emsg = did_emsg_save;
-	    called_emsg = called_emsg_save;
-	    if (must_redraw != 0)
-		need_update_screen = TRUE;
-	    must_redraw = must_redraw > save_must_redraw
-					      ? must_redraw : save_must_redraw;
 
 	    /* Only fire the timer again if it repeats and stop_timer() wasn't
 	     * called while inside the callback (tr_id == -1). */
-	    if (timer->tr_repeat != 0 && timer->tr_id != -1
-		    && timer->tr_emsg_count < 3)
+	    if (timer->tr_repeat != 0 && timer->tr_id != -1)
 	    {
 		profile_setlimit(timer->tr_interval, &timer->tr_due);
 		this_due = GET_TIMEDIFF(timer, now);
@@ -1272,7 +1245,7 @@ check_due_timer(void)
     }
 
     if (did_one)
-	redraw_after_callback(need_update_screen);
+	redraw_after_callback();
 
     return current_id != last_timer_id ? 1 : next_due;
 }
@@ -1941,9 +1914,9 @@ check_changed(buf_T *buf, int flags)
 	}
 #endif
 	if (flags & CCGD_EXCMD)
-	    no_write_message();
+	    EMSG(_(e_nowrtmsg));
 	else
-	    no_write_message_nobang();
+	    EMSG(_(e_nowrtmsg_nobang));
 	return TRUE;
     }
     return FALSE;
@@ -1988,7 +1961,9 @@ dialog_changed(
     buf_T	*buf2;
     exarg_T     ea;
 
-    dialog_msg(buff, _("Save changes to \"%s\"?"), buf->b_fname);
+    dialog_msg(buff, _("Save changes to \"%s\"?"),
+			(buf->b_fname != NULL) ?
+			buf->b_fname : (char_u *)_("Untitled"));
     if (checkall)
 	ret = vim_dialog_yesnoallcancel(VIM_QUESTION, NULL, buff, 1);
     else
@@ -2069,7 +2044,7 @@ dialog_changed(
     int
 can_abandon(buf_T *buf, int forceit)
 {
-    return (	   buf_hide(buf)
+    return (	   P_HID(buf)
 		|| !bufIsChanged(buf)
 		|| buf->b_nwindows > 1
 		|| autowrite(buf, forceit) == OK
@@ -2185,14 +2160,7 @@ check_changed_any(
 	    msg_col = 0;
 	    msg_didout = FALSE;
 	}
-	if (
-#ifdef FEAT_TERMINAL
-		term_job_running(buf->b_term)
-		    ? EMSG2(_("E947: Job still running in buffer \"%s\""),
-								  buf->b_fname)
-		    :
-#endif
-		EMSG2(_("E162: No write since last change for buffer \"%s\""),
+	if (EMSG2(_("E162: No write since last change for buffer \"%s\""),
 		    buf_spname(buf) != NULL ? buf_spname(buf) : buf->b_fname))
 	{
 	    save = no_wait_return;
@@ -2332,8 +2300,8 @@ do_one_arg(char_u *str)
  * Separate the arguments in "str" and return a list of pointers in the
  * growarray "gap".
  */
-    static int
-get_arglist(garray_T *gap, char_u *str, int escaped)
+    int
+get_arglist(garray_T *gap, char_u *str)
 {
     ga_init2(gap, (int)sizeof(char_u *), 20);
     while (*str != NUL)
@@ -2344,10 +2312,6 @@ get_arglist(garray_T *gap, char_u *str, int escaped)
 	    return FAIL;
 	}
 	((char_u **)gap->ga_data)[gap->ga_len++] = str;
-
-	/* If str is escaped, don't handle backslashes or spaces */
-	if (!escaped)
-	    return OK;
 
 	/* Isolate one argument, change it in-place, put a NUL after it. */
 	str = do_one_arg(str);
@@ -2371,7 +2335,7 @@ get_arglist_exp(
     garray_T	ga;
     int		i;
 
-    if (get_arglist(&ga, str, TRUE) == FAIL)
+    if (get_arglist(&ga, str) == FAIL)
 	return FAIL;
     if (wig == TRUE)
 	i = expand_wildcards(ga.ga_len, (char_u **)ga.ga_data,
@@ -2417,7 +2381,6 @@ do_arglist(
     char_u	*p;
     int		match;
 #endif
-    int		arg_escaped = TRUE;
 
     /*
      * Set default argument for ":argadd" command.
@@ -2427,13 +2390,12 @@ do_arglist(
 	if (curbuf->b_ffname == NULL)
 	    return FAIL;
 	str = curbuf->b_fname;
-	arg_escaped = FALSE;
     }
 
     /*
      * Collect all file name arguments in "new_ga".
      */
-    if (get_arglist(&new_ga, str, arg_escaped) == FAIL)
+    if (get_arglist(&new_ga, str) == FAIL)
 	return FAIL;
 
 #ifdef FEAT_LISTCMDS
@@ -2746,13 +2708,13 @@ do_argfile(exarg_T *eap, int argn)
 	     * the same buffer
 	     */
 	    other = TRUE;
-	    if (buf_hide(curbuf))
+	    if (P_HID(curbuf))
 	    {
 		p = fix_fname(alist_name(&ARGLIST[argn]));
 		other = otherfile(p);
 		vim_free(p);
 	    }
-	    if ((!buf_hide(curbuf) || !other)
+	    if ((!P_HID(curbuf) || !other)
 		  && check_changed(curbuf, CCGD_AW
 					 | (other ? 0 : CCGD_MULTWIN)
 					 | (eap->forceit ? CCGD_FORCEIT : 0)
@@ -2773,7 +2735,7 @@ do_argfile(exarg_T *eap, int argn)
 	 * argument index. */
 	if (do_ecmd(0, alist_name(&ARGLIST[curwin->w_arg_idx]), NULL,
 		      eap, ECMD_LAST,
-		      (buf_hide(curwin->w_buffer) ? ECMD_HIDE : 0)
+		      (P_HID(curwin->w_buffer) ? ECMD_HIDE : 0)
 			 + (eap->forceit ? ECMD_FORCEIT : 0), curwin) == FAIL)
 	    curwin->w_arg_idx = old_arg_idx;
 	/* like Vi: set the mark where the cursor is in the file. */
@@ -2794,7 +2756,7 @@ ex_next(exarg_T *eap)
      * check for changed buffer now, if this fails the argument list is not
      * redefined.
      */
-    if (       buf_hide(curbuf)
+    if (       P_HID(curbuf)
 	    || eap->cmdidx == CMD_snext
 	    || !check_changed(curbuf, CCGD_AW
 				    | (eap->forceit ? CCGD_FORCEIT : 0)
@@ -2819,20 +2781,34 @@ ex_next(exarg_T *eap)
     void
 ex_argedit(exarg_T *eap)
 {
-    int i = eap->addr_count ? (int)eap->line2 : curwin->w_arg_idx + 1;
+    int		fnum;
+    int		i;
+    char_u	*s;
 
-    if (do_arglist(eap->arg, AL_ADD, i) == FAIL)
-	return;
-#ifdef FEAT_TITLE
-    maketitle();
-#endif
+    /* Add the argument to the buffer list and get the buffer number. */
+    fnum = buflist_add(eap->arg, BLN_LISTED);
 
-    if (curwin->w_arg_idx == 0 && (curbuf->b_ml.ml_flags & ML_EMPTY)
-	    && curbuf->b_ffname == NULL)
-	i = 0;
+    /* Check if this argument is already in the argument list. */
+    for (i = 0; i < ARGCOUNT; ++i)
+	if (ARGLIST[i].ae_fnum == fnum)
+	    break;
+    if (i == ARGCOUNT)
+    {
+	/* Can't find it, add it to the argument list. */
+	s = vim_strsave(eap->arg);
+	if (s == NULL)
+	    return;
+	i = alist_add_list(1, &s,
+	       eap->addr_count > 0 ? (int)eap->line2 : curwin->w_arg_idx + 1);
+	if (i < 0)
+	    return;
+	curwin->w_arg_idx = i;
+    }
+
+    alist_check_arg_idx();
+
     /* Edit the argument. */
-    if (i < ARGCOUNT)
-	do_argfile(eap, i);
+    do_argfile(eap, i);
 }
 
 /*
@@ -2949,7 +2925,7 @@ ex_listdo(exarg_T *eap)
 
     if (eap->cmdidx == CMD_windo
 	    || eap->cmdidx == CMD_tabdo
-	    || buf_hide(curbuf)
+	    || P_HID(curbuf)
 	    || !check_changed(curbuf, CCGD_AW
 				    | (eap->forceit ? CCGD_FORCEIT : 0)
 				    | CCGD_EXCMD))
@@ -3754,7 +3730,6 @@ ex_packadd(exarg_T *eap)
 ex_options(
     exarg_T	*eap UNUSED)
 {
-    vim_setenv((char_u *)"OPTWIN_CMD", (char_u *)(cmdmod.tab ? "tab" : ""));
     cmd_source((char_u *)SYS_OPTWIN_FILE, NULL);
 }
 #endif

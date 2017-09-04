@@ -809,11 +809,10 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 		{
 			CSharpResolver oldResolver = resolver;
 			try {
-				IMember member = null;
+				IMember member;
 				if (unresolvedFile != null) {
 					member = GetMemberFromLocation(memberDeclaration);
-				}
-				if (member == null) {
+				} else {
 					// Re-discover the method:
 					SymbolKind symbolKind = memberDeclaration.SymbolKind;
 					var parameterTypes = TypeSystemConvertVisitor.GetParameterTypes(memberDeclaration.GetChildrenByRole(Roles.Parameter), InterningProvider.Dummy);
@@ -1730,10 +1729,8 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 			IType resultType;
 			switch (undocumentedExpression.UndocumentedExpressionType) {
 				case UndocumentedExpressionType.ArgListAccess:
-					resultType = resolver.Compilation.FindType(typeof(RuntimeArgumentHandle));
-					break;
 				case UndocumentedExpressionType.ArgList:
-					resultType = SpecialType.ArgList;
+					resultType = resolver.Compilation.FindType(typeof(RuntimeArgumentHandle));
 					break;
 				case UndocumentedExpressionType.RefValue:
 					var tre = undocumentedExpression.Arguments.ElementAtOrDefault(1) as TypeReferenceExpression;
@@ -3379,9 +3376,6 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 			foreach (var a in composedType.ArraySpecifiers.Reverse()) {
 				t = new ArrayType(resolver.Compilation, t, a.Dimensions);
 			}
-			if (composedType.HasRefSpecifier) {
-				t = new ByReferenceType(t);
-			}
 			return new TypeResolveResult(t);
 		}
 		#endregion
@@ -3966,12 +3960,7 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 		{
 			return null;
 		}
-
-		ResolveResult IAstVisitor<ResolveResult>.VisitErrorNode(AstNode errorNode)
-		{
-			return null;
-		}
-
+		
 		ResolveResult IAstVisitor<ResolveResult>.VisitPatternPlaceholder(AstNode placeholder, ICSharpCode.NRefactory.PatternMatching.Pattern pattern)
 		{
 			return null;

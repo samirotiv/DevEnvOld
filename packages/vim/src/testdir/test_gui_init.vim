@@ -1,8 +1,7 @@
 " Tests specifically for the GUI features/options that need to be set up at
 " startup to take effect at runtime.
 
-source shared.vim
-if !CanRunGui()
+if !has('gui') || ($DISPLAY == "" && !has('gui_running'))
   finish
 endif
 

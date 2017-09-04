@@ -15,7 +15,7 @@ using System;
 using System.Text;
 using System.Collections.Generic;
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	// <summary>
 	//   This is used by the flow analysis code to keep track of the type of local variables.
@@ -105,7 +105,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			return struct_info.GetStructField (name);
 		}
 
-		public static TypeInfo GetTypeInfo (TypeSpec type, IMemberContext context)
+		public static TypeInfo GetTypeInfo (TypeSpec type)
 		{
 			if (!type.IsStruct)
 				return simple_type;
@@ -114,7 +114,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			if (type_hash.TryGetValue (type, out info))
 				return info;
 
-			var struct_info = StructInfo.GetStructInfo (type, context);
+			var struct_info = StructInfo.GetStructInfo (type);
 			if (struct_info != null) {
 				info = new TypeInfo (struct_info, 0);
 			} else {
@@ -139,22 +139,15 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				var field = struct_info.Fields[i];
 
 				if (!fc.IsStructFieldDefinitelyAssigned (vi, field.Name)) {
-					var bf = field.MemberDefinition as Property.BackingFieldDeclaration;
-					if (bf != null) {
-						if (bf.Initializer != null)
-							continue;
-
+					if (field.MemberDefinition is Property.BackingField) {
 						fc.Report.Error (843, loc,
 							"An automatically implemented property `{0}' must be fully assigned before control leaves the constructor. Consider calling the default struct contructor from a constructor initializer",
 							field.GetSignatureForError ());
-
-						ok = false;
-						continue;
+					} else {
+						fc.Report.Error (171, loc,
+							"Field `{0}' must be fully assigned before control leaves the constructor",
+							field.GetSignatureForError ());
 					}
-
-					fc.Report.Error (171, loc,
-						"Field `{0}' must be fully assigned before control leaves the constructor",
-						field.GetSignatureForError ());
 					ok = false;
 				}
 			}
@@ -184,11 +177,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			//
 			// We only need one instance per type
 			//
-			StructInfo (TypeSpec type, IMemberContext context)
+			StructInfo (TypeSpec type)
 			{
 				field_type_hash.Add (type, this);
 
-				fields = MemberCache.GetAllFieldsForDefiniteAssignment (type, context);
+				fields = MemberCache.GetAllFieldsForDefiniteAssignment (type);
 
 				struct_field_hash = new Dictionary<string, TypeInfo> ();
 				field_hash = new Dictionary<string, int> (fields.Count);
@@ -202,7 +195,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					var field = fields [i];
 
 					if (field.MemberType.IsStruct)
-						sinfo [i] = GetStructInfo (field.MemberType, context);
+						sinfo [i] = GetStructInfo (field.MemberType);
 
 					if (sinfo [i] == null)
 						field_hash.Add (field.Name, ++Length);
@@ -260,7 +253,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				return null;
 			}
 
-			public static StructInfo GetStructInfo (TypeSpec type, IMemberContext context)
+			public static StructInfo GetStructInfo (TypeSpec type)
 			{
 				if (type.BuiltinType > 0)
 					return null;
@@ -269,7 +262,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				if (field_type_hash.TryGetValue (type, out info))
 					return info;
 
-				return new StructInfo (type, context);
+				return new StructInfo (type);
 			}
 		}
 	}
@@ -305,11 +298,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		VariableInfo[] sub_info;
 
-		VariableInfo (string name, TypeSpec type, int offset, IMemberContext context)
+		VariableInfo (string name, TypeSpec type, int offset)
 		{
 			this.Name = name;
 			this.Offset = offset;
-			this.TypeInfo = TypeInfo.GetTypeInfo (type, context);
+			this.TypeInfo = TypeInfo.GetTypeInfo (type);
 
 			Length = TypeInfo.TotalLength;
 
@@ -343,14 +336,14 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		public static VariableInfo Create (BlockContext bc, LocalVariable variable)
 		{
-			var info = new VariableInfo (variable.Name, variable.Type, bc.AssignmentInfoOffset, bc);
+			var info = new VariableInfo (variable.Name, variable.Type, bc.AssignmentInfoOffset);
 			bc.AssignmentInfoOffset += info.Length;
 			return info;
 		}
 
 		public static VariableInfo Create (BlockContext bc, Parameter parameter)
 		{
-			var info = new VariableInfo (parameter.Name, parameter.Type, bc.AssignmentInfoOffset, bc) {
+			var info = new VariableInfo (parameter.Name, parameter.Type, bc.AssignmentInfoOffset) {
 				IsParameter = true
 			};
 
@@ -669,7 +662,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				large_bits[index >> 5] |= (1 << (index & 31));
 		}
 
-		public static bool AreEqual (DefiniteAssignmentBitSet a, DefiniteAssignmentBitSet b)
+		static bool AreEqual (DefiniteAssignmentBitSet a, DefiniteAssignmentBitSet b)
 		{
 			if (a.large_bits == null)
 				return (a.bits & ~copy_on_write_flag) == (b.bits & ~copy_on_write_flag);

@@ -693,13 +693,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 			AddCustomAttributes(propertyDefinition.CustomAttributes, targetEntity.Attributes);
 		}
 		#endregion
-		
-		#region Type Parameter Attributes
-		void AddAttributes(IKVM.Reflection.Type genericParameter, IUnresolvedTypeParameter targetTP)
-		{
-			AddCustomAttributes(genericParameter.CustomAttributes, targetTP.Attributes);
-		}
-		#endregion
 
 		#region MarshalAsAttribute (ConvertMarshalInfo)
 		static readonly ITypeReference marshalAsAttributeTypeRef = typeof(MarshalAsAttribute).ToTypeReference();
@@ -849,7 +842,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 			for (int i = 0; i < typeParameters.Count; i++) {
 				var tp = (DefaultUnresolvedTypeParameter)typeParameters[i];
 				AddConstraints(tp, args[i]);
-				AddAttributes(args[i], tp);
 				tp.ApplyInterningProvider(interningProvider);
 			}
 		}
@@ -1092,7 +1084,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 					for (int i = 0; i < genericArguments.Length; i++) {
 						var tp = (DefaultUnresolvedTypeParameter)m.TypeParameters[i];
 						AddConstraints(tp, genericArguments[i]);
-						AddAttributes(genericArguments[i], tp);
 						tp.ApplyInterningProvider(interningProvider);
 					}
 				}
@@ -1105,9 +1096,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 
 			foreach (var p in method.GetParameters ()) {
 				m.Parameters.Add(ReadParameter(p));
-			}
-			if ((method.CallingConvention & CallingConventions.VarArgs) != 0) {
-				m.Parameters.Add(new DefaultUnresolvedParameter(SpecialType.ArgList, string.Empty));
 			}
 
 			// mark as extension method if the attribute is set
@@ -1223,7 +1211,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 				for (int i = 0; i < genericArguments.Length; i++) {
 					var tp = (DefaultUnresolvedTypeParameter)m.TypeParameters[i];
 					AddConstraints(tp, genericArguments[i]);
-					AddAttributes(genericArguments[i], tp);
 					tp.ApplyInterningProvider(interningProvider);
 				}
 			}
@@ -1236,9 +1223,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 
 			foreach (var p in method.GetParameters ()) {
 				m.Parameters.Add(ReadParameter(p));
-			}
-			if ((method.CallingConvention & CallingConventions.VarArgs) != 0) {
-				m.Parameters.Add(new DefaultUnresolvedParameter(SpecialType.ArgList, string.Empty));
 			}
 
 			FinishReadMember(m, method);
@@ -1452,9 +1436,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 
 			foreach (var par in property.GetIndexParameters ()) {
 				p.Parameters.Add(ReadParameter(par));
-			}
-			if ((property.__CallingConvention & CallingConventions.VarArgs) != 0) {
-				p.Parameters.Add(new DefaultUnresolvedParameter(SpecialType.ArgList, string.Empty));
 			}
 
 			AddAttributes(property, p);

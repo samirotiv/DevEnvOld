@@ -16,20 +16,19 @@ annotations.
 
 from ast import literal_eval
 import re
+from itertools import chain
 from textwrap import dedent
 
-from jedi._compatibility import u
-from jedi.common import unite
-from jedi.evaluate import context
 from jedi.evaluate.cache import memoize_default
-from jedi.parser.python import parse
+from jedi.parser import ParserWithRecovery, load_grammar
+from jedi.parser.tree import Class
 from jedi.common import indent_block
-from jedi.evaluate.iterable import SequenceLiteralContext, FakeSequence
+from jedi.evaluate.iterable import Array, FakeSequence, AlreadyEvaluated
 
 
 DOCSTRING_PARAM_PATTERNS = [
     r'\s*:type\s+%s:\s*([^\n]+)',  # Sphinx
-    r'\s*:param\s+(\w+)\s+%s:[^\n]*',  # Sphinx param with type
+    r'\s*:param\s+(\w+)\s+%s:[^\n]+',  # Sphinx param with type
     r'\s*@type\s+%s:\s*([^\n]+)',  # Epydoc
 ]
 
@@ -115,12 +114,12 @@ def _strip_rst_role(type_str):
         return type_str
 
 
-def _evaluate_for_statement_string(module_context, string):
-    code = dedent(u("""
+def _evaluate_for_statement_string(evaluator, string, module):
+    code = dedent("""
     def pseudo_docstring_stuff():
         # Create a pseudo function for docstring statements.
-    {0}
-    """))
+    %s
+    """)
     if string is None:
         return []
 
@@ -132,40 +131,31 @@ def _evaluate_for_statement_string(module_context, string):
     # Take the default grammar here, if we load the Python 2.7 grammar here, it
     # will be impossible to use `...` (Ellipsis) as a token. Docstring types
     # don't need to conform with the current grammar.
-    module = parse(code.format(indent_block(string)))
+    p = ParserWithRecovery(load_grammar(), code % indent_block(string))
     try:
-        funcdef = next(module.iter_funcdefs())
-        # First pick suite, then simple_stmt and then the node,
+        pseudo_cls = p.module.subscopes[0]
+        # First pick suite, then simple_stmt (-2 for DEDENT) and then the node,
         # which is also not the last item, because there's a newline.
-        stmt = funcdef.children[-1].children[-1].children[-2]
+        stmt = pseudo_cls.children[-1].children[-2].children[-2]
     except (AttributeError, IndexError):
         return []
 
-    from jedi.evaluate.param import ValuesArguments
-    from jedi.evaluate.representation import FunctionContext
-    function_context = FunctionContext(
-        module_context.evaluator,
-        module_context,
-        funcdef
-    )
-    func_execution_context = function_context.get_function_execution(
-        ValuesArguments([])
-    )
     # Use the module of the param.
     # TODO this module is not the module of the param in case of a function
     # call. In that case it's the module of the function call.
     # stuffed with content from a function call.
-    return list(_execute_types_in_stmt(func_execution_context, stmt))
+    pseudo_cls.parent = module
+    return list(_execute_types_in_stmt(evaluator, stmt))
 
 
-def _execute_types_in_stmt(module_context, stmt):
+def _execute_types_in_stmt(evaluator, stmt):
     """
     Executing all types or general elements that we find in a statement. This
     doesn't include tuple, list and dict literals, because the stuff they
     contain is executed. (Used as type information).
     """
-    definitions = module_context.eval_node(stmt)
-    return unite(_execute_array_values(module_context.evaluator, d) for d in definitions)
+    definitions = evaluator.eval_element(stmt)
+    return chain.from_iterable(_execute_array_values(evaluator, d) for d in definitions)
 
 
 def _execute_array_values(evaluator, array):
@@ -173,47 +163,42 @@ def _execute_array_values(evaluator, array):
     Tuples indicate that there's not just one return value, but the listed
     ones.  `(str, int)` means that it returns a tuple with both types.
     """
-    if isinstance(array, SequenceLiteralContext):
+    if isinstance(array, Array):
         values = []
-        for lazy_context in array.py__iter__():
-            objects = unite(_execute_array_values(evaluator, typ) for typ in lazy_context.infer())
-            values.append(context.LazyKnownContexts(objects))
-        return set([FakeSequence(evaluator, array.array_type, values)])
+        for types in array.py__iter__():
+            objects = set(chain.from_iterable(_execute_array_values(evaluator, typ) for typ in types))
+            values.append(AlreadyEvaluated(objects))
+        return [FakeSequence(evaluator, values, array.type)]
     else:
-        return array.execute_evaluated()
+        return evaluator.execute(array)
 
 
-@memoize_default()
-def infer_param(execution_context, param):
-    from jedi.evaluate.instance import InstanceFunctionExecution
-
+@memoize_default(None, evaluator_is_first_arg=True)
+def follow_param(evaluator, param):
     def eval_docstring(docstring):
         return set(
-            p
-            for param_str in _search_param_in_docstr(docstring, param.name.value)
-            for p in _evaluate_for_statement_string(module_context, param_str)
+            [p for param_str in _search_param_in_docstr(docstring, str(param.name))
+                for p in _evaluate_for_statement_string(evaluator, param_str, module)]
         )
-    module_context = execution_context.get_root_context()
-    func = param.get_parent_function()
-    if func.type == 'lambdef':
-        return set()
+    func = param.parent_function
+    module = param.get_parent_until()
 
-    types = eval_docstring(execution_context.py__doc__())
-    if isinstance(execution_context, InstanceFunctionExecution) and \
-            execution_context.function_context.name.string_name == '__init__':
-        class_context = execution_context.instance.class_context
-        types |= eval_docstring(class_context.py__doc__())
+    types = eval_docstring(func.raw_doc)
+    if func.name.value == '__init__':
+        cls = func.get_parent_until(Class)
+        if cls.type == 'classdef':
+            types |= eval_docstring(cls.raw_doc)
 
     return types
 
 
-@memoize_default()
-def infer_return_types(function_context):
+@memoize_default(None, evaluator_is_first_arg=True)
+def find_return_types(evaluator, func):
     def search_return_in_docstr(code):
         for p in DOCSTRING_RETURN_PATTERNS:
             match = p.search(code)
             if match:
                 return _strip_rst_role(match.group(1))
 
-    type_str = search_return_in_docstr(function_context.py__doc__())
-    return _evaluate_for_statement_string(function_context.get_root_context(), type_str)
+    type_str = search_return_in_docstr(func.raw_doc)
+    return _evaluate_for_statement_string(evaluator, type_str, func.get_parent_until())

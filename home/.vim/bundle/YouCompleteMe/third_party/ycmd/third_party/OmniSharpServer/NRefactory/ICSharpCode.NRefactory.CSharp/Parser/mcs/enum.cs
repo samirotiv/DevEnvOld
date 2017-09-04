@@ -22,13 +22,13 @@ using MetaType = System.Type;
 using System.Reflection;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	public class EnumMember : Const
 	{
 		class EnumTypeExpr : TypeExpr
 		{
-			public override TypeSpec ResolveAsType (IMemberContext ec, bool allowUnboundTypeArguments)
+			public override TypeSpec ResolveAsType (IMemberContext ec)
 			{
 				type = ec.CurrentType;
 				eclass = ExprClass.Type;
@@ -64,12 +64,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			if (expr is EnumConstant)
 				expr = ((EnumConstant) expr).Child;
 
-			var en = (Enum)Parent;
-			var underlying = en.UnderlyingType;
+			var underlying = ((Enum) Parent).UnderlyingType;
 			if (expr != null) {
 				expr = expr.ImplicitConversionRequired (rc, underlying);
 				if (expr != null && !IsValidEnumType (expr.Type)) {
-					en.Error_UnderlyingType (Location);
+					Enum.Error_1008 (Location, Report);
 					expr = null;
 				}
 			}
@@ -218,7 +217,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			AddMember (em);
 		}
 
-		public void Error_UnderlyingType (Location loc)
+		public static void Error_1008 (Location loc, Report Report)
 		{
 			Report.Error (1008, loc,
 				"Type byte, sbyte, short, ushort, int, uint, long or ulong expected");
@@ -226,21 +225,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 		protected override void DoDefineContainer ()
 		{
-			TypeSpec ut;
-			if (underlying_type_expr != null) {
-				ut = underlying_type_expr.ResolveAsType (this);
-				if (!EnumSpec.IsValidUnderlyingType (ut)) {
-					Error_UnderlyingType (underlying_type_expr.Location);
-					ut = null;
-				}
-			} else {
-				ut = null;
-			}
-
-			if (ut == null)
-				ut = Compiler.BuiltinTypes.Int;
-
-			((EnumSpec) spec).UnderlyingType = ut;
+			((EnumSpec) spec).UnderlyingType = underlying_type_expr == null ? Compiler.BuiltinTypes.Int : underlying_type_expr.Type;
 
 			TypeBuilder.DefineField (UnderlyingValueField, UnderlyingType.GetMetaInfo (),
 				FieldAttributes.Public | FieldAttributes.SpecialName | FieldAttributes.RTSpecialName);

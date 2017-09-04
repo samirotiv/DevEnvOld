@@ -146,30 +146,14 @@ def CheckCall( args, **kwargs ):
     sys.exit( error.returncode )
 
 
-def GetGlobalPythonPrefix():
-  # In a virtualenv, sys.real_prefix points to the parent Python prefix.
-  if hasattr( sys, 'real_prefix' ):
-    return sys.real_prefix
-  # In a pyvenv (only available on Python 3), sys.base_prefix points to the
-  # parent Python prefix. Outside a pyvenv, it is equal to sys.prefix.
-  if PY_MAJOR >= 3:
-    return sys.base_prefix
-  return sys.prefix
-
-
 def GetPossiblePythonLibraryDirectories():
-  prefix = GetGlobalPythonPrefix()
-
+  library_dir = p.dirname( sysconfig.get_python_lib( standard_lib = True ) )
   if OnWindows():
-    return [ p.join( prefix, 'libs' ) ]
-  # On pyenv and some distributions, there is no Python dynamic library in the
-  # directory returned by the LIBPL variable. Such library can be found in the
-  # "lib" or "lib64" folder of the base Python installation.
-  return [
-    sysconfig.get_config_var( 'LIBPL' ),
-    p.join( prefix, 'lib64' ),
-    p.join( prefix, 'lib' )
-  ]
+    return [ p.join( library_dir, 'libs' ) ]
+  # On pyenv, there is no Python dynamic library in the directory returned by
+  # the LIBPL variable. Such library is located in the parent folder of the
+  # standard Python library modules.
+  return [ sysconfig.get_config_var( 'LIBPL' ), library_dir ]
 
 
 def FindPythonLibraries():
@@ -203,9 +187,6 @@ def FindPythonLibraries():
   static_libraries = []
 
   for library_dir in library_dirs:
-    if not p.exists( library_dir ):
-      continue
-
     # Files are sorted so that we found the non-versioned Python library before
     # the versioned one.
     for filename in sorted( os.listdir( library_dir ) ):
@@ -243,9 +224,17 @@ def CustomPythonCmakeArgs():
 
 def GetGenerator( args ):
   if OnWindows():
-    return 'Visual Studio {version}{arch}'.format(
-        version = args.msvc,
-        arch = ' Win64' if platform.architecture()[ 0 ] == '64bit' else '' )
+    if args.msvc == 14:
+      generator = 'Visual Studio 14'
+    elif args.msvc == 12:
+      generator = 'Visual Studio 12'
+    else:
+      generator = 'Visual Studio 11'
+
+    if platform.architecture()[ 0 ] == '64bit':
+      generator = generator + ' Win64'
+    return generator
+
   if PathToFirstExistingExecutable( ['ninja'] ):
     return 'Ninja'
   return 'Unix Makefiles'
@@ -267,8 +256,8 @@ def ParseArguments():
   parser.add_argument( '--system-boost', action = 'store_true',
                        help = 'Use the system boost instead of bundled one. '
                        'NOT RECOMMENDED OR SUPPORTED!')
-  parser.add_argument( '--msvc', type = int, choices = [ 12, 14, 15 ],
-                       default = 15, help = 'Choose the Microsoft Visual '
+  parser.add_argument( '--msvc', type = int, choices = [ 11, 12, 14 ],
+                       default = 14, help = 'Choose the Microsoft Visual '
                        'Studio version (default: %(default)s).' )
   parser.add_argument( '--tern-completer',
                        action = 'store_true',
@@ -341,27 +330,12 @@ def RunYcmdTests( build_dir ):
   if OnWindows():
     # We prepend the folder of the ycm_core_tests executable to the PATH
     # instead of overwriting it so that the executable is able to find the
-    # Python library.
+    # python35.dll library.
     new_env[ 'PATH' ] = DIR_OF_THIS_SCRIPT + ';' + new_env[ 'PATH' ]
   else:
     new_env[ 'LD_LIBRARY_PATH' ] = DIR_OF_THIS_SCRIPT
 
   CheckCall( p.join( tests_dir, 'ycm_core_tests' ), env = new_env )
-
-
-def RunYcmdBenchmarks( build_dir ):
-  benchmarks_dir = p.join( build_dir, 'ycm', 'benchmarks' )
-  new_env = os.environ.copy()
-
-  if OnWindows():
-    # We prepend the folder of the ycm_core_tests executable to the PATH
-    # instead of overwriting it so that the executable is able to find the
-    # Python library.
-    new_env[ 'PATH' ] = DIR_OF_THIS_SCRIPT + ';' + new_env[ 'PATH' ]
-  else:
-    new_env[ 'LD_LIBRARY_PATH' ] = DIR_OF_THIS_SCRIPT
-
-  CheckCall( p.join( benchmarks_dir, 'ycm_core_benchmarks' ), env = new_env )
 
 
 # On Windows, if the ycmd library is in use while building it, a LNK1104
@@ -416,27 +390,20 @@ def BuildYcmdLib( args ):
 
     CheckCall( [ 'cmake' ] + full_cmake_args, exit_message = exit_message )
 
-    build_targets = [ 'ycm_core' ]
-    if 'YCM_TESTRUN' in os.environ:
-      build_targets.append( 'ycm_core_tests' )
-    if 'YCM_BENCHMARK' in os.environ:
-      build_targets.append( 'ycm_core_benchmarks' )
+    build_target = ( 'ycm_core' if 'YCM_TESTRUN' not in os.environ else
+                     'ycm_core_tests' )
 
+    build_command = [ 'cmake', '--build', '.', '--target', build_target ]
     if OnWindows():
       config = 'Debug' if args.enable_debug else 'Release'
-      build_config = [ '--config', config ]
+      build_command.extend( [ '--config', config ] )
     else:
-      build_config = [ '--', '-j', str( NumCores() ) ]
+      build_command.extend( [ '--', '-j', str( NumCores() ) ] )
 
-    for target in build_targets:
-      build_command = ( [ 'cmake', '--build', '.', '--target', target ] +
-                        build_config )
-      CheckCall( build_command, exit_message = exit_message )
+    CheckCall( build_command, exit_message = exit_message )
 
     if 'YCM_TESTRUN' in os.environ:
       RunYcmdTests( build_dir )
-    if 'YCM_BENCHMARK' in os.environ:
-      RunYcmdBenchmarks( build_dir )
   finally:
     os.chdir( DIR_OF_THIS_SCRIPT )
 
@@ -453,8 +420,7 @@ def BuildOmniSharp():
     sys.exit( 'ERROR: msbuild or xbuild is required to build Omnisharp.' )
 
   os.chdir( p.join( DIR_OF_THIS_SCRIPT, 'third_party', 'OmniSharpServer' ) )
-  CheckCall( [ build_command, '/property:Configuration=Release',
-                              '/property:TargetFrameworkVersion=v4.5' ] )
+  CheckCall( [ build_command, '/property:Configuration=Release' ] )
 
 
 def BuildGoCode():
@@ -464,7 +430,7 @@ def BuildGoCode():
   os.chdir( p.join( DIR_OF_THIS_SCRIPT, 'third_party', 'gocode' ) )
   CheckCall( [ 'go', 'build' ] )
   os.chdir( p.join( DIR_OF_THIS_SCRIPT, 'third_party', 'godef' ) )
-  CheckCall( [ 'go', 'build', 'godef.go' ] )
+  CheckCall( [ 'go', 'build' ] )
 
 
 def BuildRacerd():
@@ -484,13 +450,13 @@ def BuildRacerd():
 
 
 def SetUpTern():
-  # On Debian-based distributions, node is by default installed as nodejs.
-  node = PathToFirstExistingExecutable( [ 'nodejs', 'node' ] )
-  if not node:
-    sys.exit( 'ERROR: node is required to set up Tern.' )
-  npm = FindExecutable( 'npm' )
-  if not npm:
-    sys.exit( 'ERROR: npm is required to set up Tern.' )
+  paths = {}
+  for exe in [ 'node', 'npm' ]:
+    path = FindExecutable( exe )
+    if not path:
+      sys.exit( 'ERROR: {0} is required to set up ternjs.'.format( exe ) )
+    else:
+      paths[ exe ] = path
 
   # We install Tern into a runtime directory. This allows us to control
   # precisely the version (and/or git commit) that is used by ycmd.  We use a
@@ -511,7 +477,7 @@ def SetUpTern():
   # (third_party/tern_runtime) that defines the packages that we require,
   # including Tern and any plugins which we require as standard.
   os.chdir( p.join( DIR_OF_THIS_SCRIPT, 'third_party', 'tern_runtime' ) )
-  CheckCall( [ npm, 'install', '--production' ] )
+  CheckCall( [ paths[ 'npm' ], 'install', '--production' ] )
 
 
 def WritePythonUsedDuringBuild():
@@ -525,7 +491,6 @@ def Main():
   args = ParseArguments()
   ExitIfYcmdLibInUseOnWindows()
   BuildYcmdLib( args )
-  WritePythonUsedDuringBuild()
   if args.omnisharp_completer or args.all_completers:
     BuildOmniSharp()
   if args.gocode_completer or args.all_completers:
@@ -534,6 +499,7 @@ def Main():
     SetUpTern()
   if args.racer_completer or args.all_completers:
     BuildRacerd()
+  WritePythonUsedDuringBuild()
 
 
 if __name__ == '__main__':

@@ -24,7 +24,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	public abstract class MetadataImporter
 	{
@@ -434,8 +434,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 						else
 							mod |= Modifiers.VIRTUAL;
 					}
-				} else if (parameters.HasExtensionMethodType) {
-					mod |= Modifiers.METHOD_EXTENSION;
 				}
 			}
 
@@ -1287,23 +1285,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			public string DefaultIndexerName;
 			public bool? CLSAttributeValue;
 			public TypeSpec CoClass;
-
-			static bool HasMissingType (ConstructorInfo ctor)
-			{
-#if STATIC
-				//
-				// Mimic odd csc behaviour where missing type on predefined
-				// attributes means the attribute is silently ignored. This can
-				// happen with PCL facades
-				//
-				foreach (var p in ctor.GetParameters ()) {
-					if (p.ParameterType.__ContainsMissingType)
-						return true;
-				}
-#endif
-
-				return false;
-			}
 			
 			public static AttributesBag Read (MemberInfo mi, MetadataImporter importer)
 			{
@@ -1378,9 +1359,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 							if (dt.Namespace != "System")
 								continue;
 
-							if (HasMissingType (a.Constructor))
-								continue;
-
 							if (bag == null)
 								bag = new AttributesBag ();
 
@@ -1397,9 +1375,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 						// Interface only attribute
 						if (name == "CoClassAttribute") {
 							if (dt.Namespace != "System.Runtime.InteropServices")
-								continue;
-
-							if (HasMissingType (a.Constructor))
 								continue;
 
 							if (bag == null)

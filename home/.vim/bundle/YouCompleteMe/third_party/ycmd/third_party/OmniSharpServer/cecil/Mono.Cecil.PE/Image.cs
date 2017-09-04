@@ -1,42 +1,54 @@
 //
+// Image.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
-using System.IO;
 
+using Mono;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Metadata;
-using Mono.Collections.Generic;
 
 using RVA = System.UInt32;
 
 namespace Mono.Cecil.PE {
 
-	sealed class Image : IDisposable {
-
-		public Disposable<Stream> Stream;
-		public string FileName;
+	sealed class Image {
 
 		public ModuleKind Kind;
-		public string RuntimeVersion;
+		public TargetRuntime Runtime;
 		public TargetArchitecture Architecture;
 		public ModuleCharacteristics Characteristics;
-
-		public ImageDebugHeader DebugHeader;
+		public string FileName;
 
 		public Section [] Sections;
 
 		public Section MetadataSection;
 
 		public uint EntryPointToken;
-		public uint Timestamp;
 		public ModuleAttributes Attributes;
 
 		public DataDirectory Debug;
@@ -48,9 +60,8 @@ namespace Mono.Cecil.PE {
 		public UserStringHeap UserStringHeap;
 		public GuidHeap GuidHeap;
 		public TableHeap TableHeap;
-		public PdbHeap PdbHeap;
 
-		readonly int [] coded_index_sizes = new int [14];
+		readonly int [] coded_index_sizes = new int [13];
 
 		readonly Func<Table, int> counter;
 
@@ -122,45 +133,29 @@ namespace Mono.Cecil.PE {
 			return null;
 		}
 
-		BinaryStreamReader GetReaderAt (RVA rva)
+		public ImageDebugDirectory GetDebugHeader (out byte [] header)
 		{
-			var section = GetSectionAtVirtualAddress (rva);
-			if (section == null)
-				return null;
+			var section = GetSectionAtVirtualAddress (Debug.VirtualAddress);
+			var buffer = new ByteBuffer (section.Data);
+			buffer.position = (int) (Debug.VirtualAddress - section.VirtualAddress);
 
-			var reader = new BinaryStreamReader (Stream.value);
-			reader.MoveTo (ResolveVirtualAddressInSection (rva, section));
-			return reader;
-		}
+			var directory = new ImageDebugDirectory {
+				Characteristics = buffer.ReadInt32 (),
+				TimeDateStamp = buffer.ReadInt32 (),
+				MajorVersion = buffer.ReadInt16 (),
+				MinorVersion = buffer.ReadInt16 (),
+				Type = buffer.ReadInt32 (),
+				SizeOfData = buffer.ReadInt32 (),
+				AddressOfRawData = buffer.ReadInt32 (),
+				PointerToRawData = buffer.ReadInt32 (),
+			};
 
-		public TRet GetReaderAt<TItem, TRet> (RVA rva, TItem item, Func<TItem, BinaryStreamReader, TRet> read) where TRet : class
-		{
-			var position = Stream.value.Position;
-			try {
-				var reader = GetReaderAt (rva);
-				if (reader == null)
-					return null;
+			buffer.position = (int) (directory.PointerToRawData - section.PointerToRawData);
 
-				return read (item, reader);
-			} finally {
-				Stream.value.Position = position;
-			}
-		}
+			header = new byte [directory.SizeOfData];
+			Buffer.BlockCopy (buffer.buffer, buffer.position, header, 0, header.Length);
 
-		public bool HasDebugTables ()
-		{
-			return HasTable (Table.Document)
-				|| HasTable (Table.MethodDebugInformation)
-				|| HasTable (Table.LocalScope)
-				|| HasTable (Table.LocalVariable)
-				|| HasTable (Table.LocalConstant)
-				|| HasTable (Table.StateMachineMethod)
-				|| HasTable (Table.CustomDebugInformation);
-		}
-
-		public void Dispose ()
-		{
-			Stream.Dispose ();
+			return directory;
 		}
 	}
 }

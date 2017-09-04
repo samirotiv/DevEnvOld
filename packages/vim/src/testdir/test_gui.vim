@@ -1,7 +1,6 @@
 " Tests specifically for the GUI
 
-source shared.vim
-if !CanRunGui()
+if !has('gui') || ($DISPLAY == "" && !has('gui_running'))
   finish
 endif
 

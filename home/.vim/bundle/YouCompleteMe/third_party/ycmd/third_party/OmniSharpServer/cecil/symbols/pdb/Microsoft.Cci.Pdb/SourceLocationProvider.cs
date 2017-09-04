@@ -9,6 +9,7 @@ using System.IO;
 using Microsoft.Cci;
 using Microsoft.Cci.Pdb;
 using System.Text;
+using System.Diagnostics.SymbolStore;
 
 namespace Microsoft.Cci {
 

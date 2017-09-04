@@ -7,14 +7,16 @@ import os
 import sys
 import textwrap
 
-import pytest
+from .helpers import TestCase, cwd_at
 
+import pytest
+import jedi
+from jedi._compatibility import u
 from jedi import Script
 from jedi import api
 from jedi import common
 from jedi.evaluate import imports
-from jedi.parser.python import parse
-from .helpers import TestCase, cwd_at
+from jedi.parser import ParserWithRecovery, load_grammar
 
 #jedi.set_debug_function()
 
@@ -100,11 +102,10 @@ class TestRegression(TestCase):
 
     def test_end_pos_line(self):
         # jedi issue #150
-        s = "x()\nx( )\nx(  )\nx (  )"
-        module = parse(s)
-        for i, simple_stmt in enumerate(module.children[:-1]):
-            expr_stmt = simple_stmt.children[0]
-            assert expr_stmt.end_pos == (i + 1, i + 3)
+        s = u("x()\nx( )\nx(  )\nx (  )")
+        parser = ParserWithRecovery(load_grammar(), s)
+        for i, s in enumerate(parser.module.statements):
+            assert s.end_pos == (i + 1, i + 3)
 
     def check_definition_by_marker(self, source, after_cursor, names):
         r"""
@@ -124,6 +125,7 @@ class TestRegression(TestCase):
                 break
         column = len(line) - len(after_cursor)
         defs = Script(source, i + 1, column).goto_definitions()
+        print(defs)
         assert [d.name for d in defs] == names
 
     def test_backslash_continuation(self):
@@ -172,8 +174,7 @@ class TestRegression(TestCase):
         for i in range(2):
             completions = Script('').completions()
             c = get_str_completion(completions)
-            str_context, = c._name.infer()
-            n = len(str_context.tree_node.children[-1].children)
+            n = len(c._definition.subscopes[0].children[-1].children)
             if i == 0:
                 limit = n
             else:

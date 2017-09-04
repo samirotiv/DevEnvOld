@@ -23,7 +23,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	public class Await : ExpressionStatement
 	{
@@ -80,6 +80,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		protected override Expression DoResolve (ResolveContext rc)
 		{
+			if (rc.HasSet (ResolveContext.Options.FinallyScope)) {
+				rc.Report.Error (1984, loc,  "The `await' operator cannot be used in the body of a finally clause");
+			}
+
 			if (rc.HasSet (ResolveContext.Options.LockScope)) {
 				rc.Report.Error (1996, loc,
 					"The `await' operator cannot be used in the body of a lock statement");
@@ -151,7 +155,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 			public bool ProbingMode { get; set; }
 
-			public override void Error_TypeDoesNotContainDefinition (ResolveContext rc, TypeSpec type, string name)
+			protected override void Error_TypeDoesNotContainDefinition (ResolveContext rc, TypeSpec type, string name)
 			{
 				Error_OperatorCannotBeApplied (rc, type);
 			}
@@ -165,7 +169,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				if (invocation != null && invocation.MethodGroup != null && (invocation.MethodGroup.BestCandidate.Modifiers & Modifiers.ASYNC) != 0) {
 					rc.Report.Error (4008, loc, "Cannot await void method `{0}'. Consider changing method return type to `Task'",
 						invocation.GetSignatureForError ());
-				} else if (type != InternalType.ErrorType) {
+				} else {
 					rc.Report.Error (4001, loc, "Cannot await `{0}' expression", type.GetSignatureForError ());
 				}
 			}
@@ -246,7 +250,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			var fe_awaiter = new FieldExpr (awaiter, loc);
 			fe_awaiter.InstanceExpression = new CompilerGeneratedThis (ec.CurrentType, loc);
 
-			Label skip_continuation = ec.DefineLabel ();
+				Label skip_continuation = ec.DefineLabel ();
 
 			using (ec.With (BuilderContext.Options.OmitDebugInfo, true)) {
 				//
@@ -324,6 +328,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				bc.Report.Error (1995, loc,
 					"The `await' operator may only be used in a query expression within the first collection expression of the initial `from' clause or within the collection expression of a `join' clause");
 				return false;
+			}
+
+			if (bc.HasSet (ResolveContext.Options.CatchScope)) {
+				bc.Report.Error (1985, loc, "The `await' operator cannot be used in the body of a catch clause");
 			}
 
 			if (!base.Resolve (bc))
@@ -445,10 +453,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			get; set;
 		}
 
-		public StackFieldExpr HoistedReturnState {
-			get; set;
-		}
-
 		public override bool IsIterator {
 			get {
 				return false;
@@ -466,9 +470,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		protected override BlockContext CreateBlockContext (BlockContext bc)
 		{
 			var ctx = base.CreateBlockContext (bc);
-			var am = bc.CurrentAnonymousMethod as AnonymousMethodBody;
-			if (am != null)
-				return_inference = am.ReturnTypeInference;
+			var lambda = bc.CurrentAnonymousMethod as LambdaMethod;
+			if (lambda != null)
+				return_inference = lambda.ReturnTypeInference;
 
 			ctx.Set (ResolveContext.Options.TryScope);
 
@@ -478,24 +482,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		public override void Emit (EmitContext ec)
 		{
 			throw new NotImplementedException ();
-		}
-
-		public void EmitCatchBlock (EmitContext ec)
-		{
-			var catch_value = LocalVariable.CreateCompilerGenerated (ec.Module.Compiler.BuiltinTypes.Exception, block, Location);
-
-			ec.BeginCatchBlock (catch_value.Type);
-			catch_value.EmitAssign (ec);
-
-			ec.EmitThis ();
-			ec.EmitInt ((int) IteratorStorey.State.After);
-			ec.Emit (OpCodes.Stfld, storey.PC.Spec);
-
-			((AsyncTaskStorey) Storey).EmitSetException (ec, new LocalVariableReference (catch_value, Location));
-
-			ec.Emit (OpCodes.Leave, move_next_ok);
-			ec.EndExceptionBlock ();
-
 		}
 
 		protected override void EmitMoveNextEpilogue (EmitContext ec)
@@ -529,6 +515,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		MethodSpec builder_factory;
 		MethodSpec builder_start;
 		PropertySpec task;
+		LocalVariable hoisted_return;
 		int locals_captured;
 		Dictionary<TypeSpec, List<Field>> stack_fields;
 		Dictionary<TypeSpec, List<Field>> awaiter_fields;
@@ -542,7 +529,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		#region Properties
 
-		public Expression HoistedReturnValue { get; set; }
+		public LocalVariable HoistedReturn {
+			get {
+				return hoisted_return;
+			}
+		}
 
 		public TypeSpec ReturnType {
 			get {
@@ -591,7 +582,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			return field;
 		}
 
-		public Field AddCapturedLocalVariable (TypeSpec type, bool requiresUninitialized = false)
+		public Field AddCapturedLocalVariable (TypeSpec type)
 		{
 			if (mutator != null)
 				type = mutator.Mutate (type);
@@ -599,7 +590,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			List<Field> existing_fields = null;
 			if (stack_fields == null) {
 				stack_fields = new Dictionary<TypeSpec, List<Field>> ();
-			} else if (stack_fields.TryGetValue (type, out existing_fields) && !requiresUninitialized) {
+			} else if (stack_fields.TryGetValue (type, out existing_fields)) {
 				foreach (var f in existing_fields) {
 					if (f.IsAvailableForReuse) {
 						f.IsAvailableForReuse = false;
@@ -732,7 +723,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			set_state_machine.Block.AddStatement (new StatementExpression (new Invocation (mg, args)));
 
 			if (has_task_return_type) {
-				HoistedReturnValue = TemporaryVariableReference.Create (bt.TypeArguments [0], StateMachineMethod.Block, Location);
+				hoisted_return = LocalVariable.CreateCompilerGenerated (bt.TypeArguments[0], StateMachineMethod.Block, Location);
 			}
 
 			return true;
@@ -825,7 +816,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			args.Add (new Argument (awaiter, Argument.AType.Ref));
 			args.Add (new Argument (new CompilerGeneratedThis (CurrentType, Location), Argument.AType.Ref));
 			using (ec.With (BuilderContext.Options.OmitDebugInfo, true)) {
-				mg.EmitCall (ec, args, true);
+				mg.EmitCall (ec, args);
 			}
 		}
 
@@ -903,7 +894,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			args.Add (new Argument (exceptionVariable));
 
 			using (ec.With (BuilderContext.Options.OmitDebugInfo, true)) {
-				mg.EmitCall (ec, args, true);
+				mg.EmitCall (ec, args);
 			}
 		}
 
@@ -919,15 +910,15 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			};
 
 			Arguments args;
-			if (HoistedReturnValue == null) {
+			if (hoisted_return == null) {
 				args = new Arguments (0);
 			} else {
 				args = new Arguments (1);
-				args.Add (new Argument (HoistedReturnValue));
+				args.Add (new Argument (new LocalVariableReference (hoisted_return, Location)));
 			}
 
 			using (ec.With (BuilderContext.Options.OmitDebugInfo, true)) {
-				mg.EmitCall (ec, args, true);
+				mg.EmitCall (ec, args);
 			}
 		}
 

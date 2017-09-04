@@ -18,6 +18,8 @@
 #include "CompletionData.h"
 #include "ClangUtils.h"
 
+#include <boost/algorithm/string/erase.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <utility>
 
 namespace YouCompleteMe {
@@ -103,7 +105,7 @@ bool IsMainCompletionTextInfo( CXCompletionChunkKind kind ) {
 
 
 std::string ChunkToString( CXCompletionString completion_string,
-                           size_t chunk_num ) {
+                           uint chunk_num ) {
   if ( !completion_string )
     return std::string();
 
@@ -113,7 +115,7 @@ std::string ChunkToString( CXCompletionString completion_string,
 
 
 std::string OptionalChunkToString( CXCompletionString completion_string,
-                                   size_t chunk_num ) {
+                                   uint chunk_num ) {
   std::string final_string;
 
   if ( !completion_string )
@@ -125,10 +127,10 @@ std::string OptionalChunkToString( CXCompletionString completion_string,
   if ( !optional_completion_string )
     return final_string;
 
-  size_t optional_num_chunks = clang_getNumCompletionChunks(
+  uint optional_num_chunks = clang_getNumCompletionChunks(
                                optional_completion_string );
 
-  for ( size_t j = 0; j < optional_num_chunks; ++j ) {
+  for ( uint j = 0; j < optional_num_chunks; ++j ) {
     CXCompletionChunkKind kind = clang_getCompletionChunkKind(
                                    optional_completion_string, j );
 
@@ -146,23 +148,13 @@ std::string OptionalChunkToString( CXCompletionString completion_string,
 }
 
 
-bool IdentifierEndsWith( const std::string &identifier,
-                         const std::string &end ) {
-  if ( identifier.size() >= end.size() )
-    return 0 == identifier.compare( identifier.length() - end.length(),
-                                    end.length(),
-                                    end );
-  return false;
-}
-
-
 // foo( -> foo
 // foo() -> foo
 std::string RemoveTrailingParens( std::string text ) {
-  if ( IdentifierEndsWith( text, "(" ) ) {
-    text.erase( text.length() - 1, 1 );
-  } else if ( IdentifierEndsWith( text, "()" ) ) {
-    text.erase( text.length() - 2, 2 );
+  if ( boost::ends_with( text, "(" ) ) {
+    boost::erase_tail( text, 1 );
+  } else if ( boost::ends_with( text, "()" ) ) {
+    boost::erase_tail( text, 2 );
   }
 
   return text;
@@ -177,12 +169,12 @@ CompletionData::CompletionData( const CXCompletionResult &completion_result ) {
   if ( !completion_string )
     return;
 
-  size_t num_chunks = clang_getNumCompletionChunks( completion_string );
+  uint num_chunks = clang_getNumCompletionChunks( completion_string );
   bool saw_left_paren = false;
   bool saw_function_params = false;
   bool saw_placeholder = false;
 
-  for ( size_t j = 0; j < num_chunks; ++j ) {
+  for ( uint j = 0; j < num_chunks; ++j ) {
     ExtractDataFromChunk( completion_string,
                           j,
                           saw_left_paren,
@@ -204,7 +196,7 @@ CompletionData::CompletionData( const CXCompletionResult &completion_result ) {
 
 
 void CompletionData::ExtractDataFromChunk( CXCompletionString completion_string,
-                                           size_t chunk_num,
+                                           uint chunk_num,
                                            bool &saw_left_paren,
                                            bool &saw_function_params,
                                            bool &saw_placeholder ) {

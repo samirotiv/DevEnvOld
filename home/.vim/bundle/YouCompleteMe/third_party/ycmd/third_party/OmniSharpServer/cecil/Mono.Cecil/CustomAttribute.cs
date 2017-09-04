@@ -1,11 +1,29 @@
 //
+// CustomAttribute.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
@@ -68,7 +86,6 @@ namespace Mono.Cecil {
 
 	public sealed class CustomAttribute : ICustomAttribute {
 
-		internal CustomAttributeValueProjection projection;
 		readonly internal uint signature;
 		internal bool resolved;
 		MethodReference constructor;
@@ -174,7 +191,7 @@ namespace Mono.Cecil {
 			if (!HasImage)
 				throw new NotSupportedException ();
 
-			return Module.Read (ref blob, this, (attribute, reader) => reader.ReadCustomAttributeBlob (attribute.signature));
+			return blob = Module.Read (this, (attribute, reader) => reader.ReadCustomAttributeBlob (attribute.signature));
 		}
 
 		void Resolve ()
@@ -182,22 +199,34 @@ namespace Mono.Cecil {
 			if (resolved || !HasImage)
 				return;
 
-			Module.Read (this, (attribute, reader) => {
-				try {
+			try {
+				Module.Read (this, (attribute, reader) => {
 					reader.ReadCustomAttributeSignature (attribute);
-					resolved = true;
-				} catch (ResolutionException) {
-					if (arguments != null)
-						arguments.Clear ();
-					if (fields != null)
-						fields.Clear ();
-					if (properties != null)
-						properties.Clear ();
+					return this;
+				});
 
-					resolved = false;
-				}
-				return this;
-			});
+				resolved = true;
+			} catch (ResolutionException) {
+				if (arguments != null)
+					arguments.Clear ();
+				if (fields != null)
+					fields.Clear ();
+				if (properties != null)
+					properties.Clear ();
+
+				resolved = false;
+			}
+		}
+	}
+
+	static partial class Mixin {
+
+		public static void CheckName (string name)
+		{
+			if (name == null)
+				throw new ArgumentNullException ("name");
+			if (name.Length == 0)
+				throw new ArgumentException ("Empty name");
 		}
 	}
 }

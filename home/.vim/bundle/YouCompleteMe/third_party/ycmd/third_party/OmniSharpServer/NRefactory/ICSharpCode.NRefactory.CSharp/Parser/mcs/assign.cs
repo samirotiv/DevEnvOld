@@ -20,7 +20,7 @@ using IKVM.Reflection.Emit;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	/// <summary>
 	///   This interface is implemented by expressions that can be assigned to.
@@ -334,7 +334,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 						
 			if (source == null) {
 				ok = false;
-				source = ErrorExpression.Instance;
+				source = EmptyExpression.Null;
 			}
 
 			target = target.ResolveLValue (ec, source);
@@ -421,13 +421,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		{
 			source.FlowAnalysis (fc);
 
-			if (target is ArrayAccess || target is IndexerExpr) {
-				target.FlowAnalysis (fc);
-				return;
-			}
-
-			var pe = target as PropertyExpr;
-			if (pe != null && !pe.IsAutoPropertyAccess)
+			if (target is ArrayAccess || target is IndexerExpr || target is PropertyExpr)
 				target.FlowAnalysis (fc);
 		}
 
@@ -500,12 +494,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			var fe = target as FieldExpr;
 			if (fe != null) {
 				fe.SetFieldAssigned (fc);
-				return;
-			}
-
-			var pe = target as PropertyExpr;
-			if (pe != null) {
-				pe.SetBackingFieldAssigned (fc);
 				return;
 			}
 		}
@@ -581,9 +569,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			{
 				flags |= Options.FieldInitializerScope | Options.ConstructorScope;
 				this.ctor_block = constructorContext.CurrentBlock.Explicit;
-
-				if (ctor_block.IsCompilerGenerated)
-					CurrentBlock = ctor_block;
 			}
 
 			public override ExplicitBlock ConstructorBlock {
@@ -609,12 +594,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 		public int AssignmentOffset { get; private set; }
 
-		public FieldBase Field {
-			get {
-				return mc;
-			}
-		}
-
 		public override Location StartLocation {
 			get {
 				return loc;
@@ -627,8 +606,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			if (source == null)
 				return null;
 
+			var bc = (BlockContext) rc;
 			if (resolved == null) {
-				var bc = (BlockContext) rc;
 				var ctx = new FieldInitializerContext (mc, bc);
 				resolved = base.DoResolve (ctx) as ExpressionStatement;
 				AssignmentOffset = ctx.AssignmentInfoOffset - bc.AssignmentInfoOffset;
@@ -662,7 +641,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		public override void FlowAnalysis (FlowAnalysisContext fc)
 		{
 			source.FlowAnalysis (fc);
-			((FieldExpr) target).SetFieldAssigned (fc);
 		}
 		
 		public bool IsDefaultInitializer {
@@ -679,33 +657,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		public override bool IsSideEffectFree {
 			get {
 				return source.IsSideEffectFree;
-			}
-		}
-	}
-
-	class PrimaryConstructorAssign : SimpleAssign
-	{
-		readonly Field field;
-		readonly Parameter parameter;
-
-		public PrimaryConstructorAssign (Field field, Parameter parameter)
-			: base (null, null, parameter.Location)
-		{
-			this.field = field;
-			this.parameter = parameter;
-		}
-
-		protected override Expression DoResolve (ResolveContext rc)
-		{
-			target = new FieldExpr (field, loc);
-			source = rc.CurrentBlock.ParametersBlock.GetParameterInfo (parameter).CreateReferenceExpression (rc, loc);
-			return base.DoResolve (rc);
-		}
-
-		public override void EmitStatement (EmitContext ec)
-		{
-			using (ec.With (BuilderContext.Options.OmitDebugInfo, true)) {
-				base.EmitStatement (ec);
 			}
 		}
 	}

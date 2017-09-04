@@ -100,7 +100,7 @@ namespace Mono.Cecil.Tests {
 			public void Register (AssemblyDefinition assembly)
 			{
 				this.RegisterAssembly (assembly);
-				this.AddSearchDirectory (Path.GetDirectoryName (assembly.MainModule.FileName));
+				this.AddSearchDirectory (Path.GetDirectoryName (assembly.MainModule.FullyQualifiedName));
 			}
 		}
 
@@ -113,13 +113,12 @@ namespace Mono.Cecil.Tests {
 
 			resolver.Register (mma.Assembly);
 
-			using (var current_module = GetCurrentModule (parameters)) {
-				var reference = new TypeReference ("Module.A", "Foo", current_module, AssemblyNameReference.Parse (mma.Assembly.FullName), false);
+			var current_module = GetCurrentModule (parameters);
+			var reference = new TypeReference ("Module.A", "Foo", current_module, AssemblyNameReference.Parse (mma.Assembly.FullName), false);
 
-				var definition = reference.Resolve ();
-				Assert.IsNotNull (definition);
-				Assert.AreEqual ("Module.A.Foo", definition.FullName);
-			}
+			var definition = reference.Resolve ();
+			Assert.IsNotNull (definition);
+			Assert.AreEqual ("Module.A.Foo", definition.FullName);
 		}
 
 		[Test]
@@ -227,7 +226,7 @@ namespace Mono.Cecil.Tests {
 			}
 		}
 
-		TRet GetReference<TDel, TRet> (TDel code)
+		static TRet GetReference<TDel, TRet> (TDel code)
 		{
 			var @delegate = code as Delegate;
 			if (@delegate == null)
@@ -265,7 +264,7 @@ namespace Mono.Cecil.Tests {
 			throw new InvalidOperationException ();
 		}
 
-		MethodDefinition GetMethodFromDelegate (Delegate @delegate)
+		static MethodDefinition GetMethodFromDelegate (Delegate @delegate)
 		{
 			var method = @delegate.Method;
 			var type = (TypeDefinition) TypeParser.ParseType (GetCurrentModule (), method.DeclaringType.FullName);

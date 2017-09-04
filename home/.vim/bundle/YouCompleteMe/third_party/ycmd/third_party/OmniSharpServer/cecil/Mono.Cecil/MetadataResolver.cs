@@ -1,11 +1,29 @@
 //
+// MetadataResolver.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
@@ -14,9 +32,12 @@ using Mono.Collections.Generic;
 
 namespace Mono.Cecil {
 
-	public interface IAssemblyResolver : IDisposable {
+	public interface IAssemblyResolver {
 		AssemblyDefinition Resolve (AssemblyNameReference name);
 		AssemblyDefinition Resolve (AssemblyNameReference name, ReaderParameters parameters);
+
+		AssemblyDefinition Resolve (string fullName);
+		AssemblyDefinition Resolve (string fullName, ReaderParameters parameters);
 	}
 
 	public interface IMetadataResolver {
@@ -25,10 +46,10 @@ namespace Mono.Cecil {
 		MethodDefinition Resolve (MethodReference method);
 	}
 
-#if !NET_CORE
+#if !SILVERLIGHT && !CF
 	[Serializable]
 #endif
-	public sealed class ResolutionException : Exception {
+	public class ResolutionException : Exception {
 
 		readonly MemberReference member;
 
@@ -59,8 +80,8 @@ namespace Mono.Cecil {
 			this.member = member;
 		}
 
-#if !NET_CORE
-		ResolutionException (
+#if !SILVERLIGHT && !CF
+		protected ResolutionException (
 			System.Runtime.Serialization.SerializationInfo info,
 			System.Runtime.Serialization.StreamingContext context)
 			: base (info, context)
@@ -87,15 +108,12 @@ namespace Mono.Cecil {
 
 		public virtual TypeDefinition Resolve (TypeReference type)
 		{
-			Mixin.CheckType (type);
+			if (type == null)
+				throw new ArgumentNullException ("type");
 
 			type = type.GetElementType ();
 
 			var scope = type.Scope;
-
-			if (scope == null)
-				return null;
-
 			switch (scope.MetadataScopeType) {
 			case MetadataScopeType.AssemblyNameReference:
 				var assembly = assembly_resolver.Resolve ((AssemblyNameReference) scope);
@@ -153,12 +171,13 @@ namespace Mono.Cecil {
 			if (declaring_type == null)
 				return null;
 
-			return declaring_type.GetNestedType (type.TypeFullName ());
+			return declaring_type.GetNestedType (type.Name);
 		}
 
 		public virtual FieldDefinition Resolve (FieldReference field)
 		{
-			Mixin.CheckField (field);
+			if (field == null)
+				throw new ArgumentNullException ("field");
 
 			var type = Resolve (field.DeclaringType);
 			if (type == null)
@@ -205,7 +224,8 @@ namespace Mono.Cecil {
 
 		public virtual MethodDefinition Resolve (MethodReference method)
 		{
-			Mixin.CheckMethod (method);
+			if (method == null)
+				throw new ArgumentNullException ("method");
 
 			var type = Resolve (method.DeclaringType);
 			if (type == null)
@@ -252,12 +272,6 @@ namespace Mono.Cecil {
 				if (!AreSame (method.ReturnType, reference.ReturnType))
 					continue;
 
-				if (method.IsVarArg () != reference.IsVarArg ())
-					continue;
-
-				if (method.IsVarArg () && IsVarArgCallTo (method, reference))
-					return method;
-
 				if (method.HasParameters != reference.HasParameters)
 					continue;
 
@@ -285,21 +299,6 @@ namespace Mono.Cecil {
 
 			for (int i = 0; i < count; i++)
 				if (!AreSame (a [i].ParameterType, b [i].ParameterType))
-					return false;
-
-			return true;
-		}
-
-		static bool IsVarArgCallTo (MethodDefinition method, MethodReference reference)
-		{
-			if (method.Parameters.Count >= reference.Parameters.Count)
-				return false;
-
-			if (reference.GetSentinelPosition () != method.Parameters.Count)
-				return false;
-
-			for (int i = 0; i < method.Parameters.Count; i++)
-				if (!AreSame (method.Parameters [i].ParameterType, reference.Parameters [i].ParameterType))
 					return false;
 
 			return true;

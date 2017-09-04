@@ -1,8 +1,7 @@
-Found 15 candidates:
+Found 14 candidates:
   const BestCompression 
   const BestSpeed 
   const DefaultCompression 
-  const HuffmanOnly 
   const NoCompression 
   func NewReader(r io.Reader) (io.ReadCloser, error)
   func NewReaderDict(r io.Reader, dict []byte) (io.ReadCloser, error)

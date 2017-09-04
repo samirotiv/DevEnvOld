@@ -605,18 +605,7 @@ check_cursor_col_win(win_T *win)
     else if (ve_flags == VE_ALL)
     {
 	if (oldcoladd > win->w_cursor.col)
-	{
 	    win->w_cursor.coladd = oldcoladd - win->w_cursor.col;
-	    if (win->w_cursor.col < len && win->w_cursor.coladd > 0)
-	    {
-		int cs, ce;
-
-		/* check that coladd is not more than the char width */
-		getvcol(win, &win->w_cursor, &cs, NULL, &ce);
-		if (win->w_cursor.coladd > ce - cs)
-		    win->w_cursor.coladd = ce - cs;
-	    }
-	}
 	else
 	    /* avoid weird number when there is a miscalculation or overflow */
 	    win->w_cursor.coladd = 0;
@@ -6061,9 +6050,6 @@ moreenv(void)
 }
 
 # ifdef USE_VIMPTY_GETENV
-/*
- * Used for mch_getenv() for Mac.
- */
     char_u *
 vimpty_getenv(const char_u *string)
 {
@@ -6321,7 +6307,7 @@ parse_queued_messages(void)
 {
     /* For Win32 mch_breakcheck() does not check for input, do it here. */
 # if defined(WIN32) && defined(FEAT_JOB_CHANNEL)
-    channel_handle_events(FALSE);
+    channel_handle_events();
 # endif
 
 # ifdef FEAT_NETBEANS_INTG

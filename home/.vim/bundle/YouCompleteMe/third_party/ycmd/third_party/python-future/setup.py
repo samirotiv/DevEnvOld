@@ -58,7 +58,7 @@ PACKAGES = ["future",
 if sys.version_info[:2] < (3, 0):
     PACKAGES += [
             "builtins",
-            # "configparser",  # removed in v0.16.0
+            "configparser",
             "copyreg",
             "html",
             "http",
@@ -106,7 +106,6 @@ CLASSIFIERS = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.3",
     "Programming Language :: Python :: 3.4",
-    "Programming Language :: Python :: 3.5",
     "License :: OSI Approved",
     "License :: OSI Approved :: MIT License",
     "Development Status :: 4 - Beta",
@@ -125,18 +124,16 @@ try:
     # If the user happens to run:
     #     python2 setup.py build
     #     python3 setup.py install
-    # then folders like "copyreg" will be in build/lib.
+    # then folders like "configparser" will be in build/lib.
     # If so, we CANNOT let the user install this, because
     # this may break his/her Python 3 install, depending on the folder order in
-    # sys.path. (Running "import html" etc. may pick up our Py2
+    # sys.path. (Running "import configparser" etc. may pick up our Py2
     # substitute packages, instead of the intended system stdlib modules.)
     SYSTEM_MODULES = set([
                           '_dummy_thread',
                           '_markupbase',
                           '_thread',
                           'builtins',
-                          # Catch the case that configparser is in the build folder
-                          # from a previous version of `future`:
                           'configparser',
                           'copyreg',
                           'html',

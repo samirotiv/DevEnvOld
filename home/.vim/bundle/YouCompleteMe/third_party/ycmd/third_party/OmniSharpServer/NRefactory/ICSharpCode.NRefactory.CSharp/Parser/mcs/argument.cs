@@ -19,7 +19,7 @@ using IKVM.Reflection.Emit;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	//
 	// Argument expression used for invocation
@@ -34,11 +34,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			Default = 3,		// argument created from default parameter value
 			DynamicTypeName = 4,	// System.Type argument for dynamic binding
 			ExtensionType = 5,	// Instance expression inserted as the first argument
-
-			// Conditional instance expression inserted as the first argument
-			ExtensionTypeConditionalAccess = 5 | ConditionalAccessFlag,
-
-			ConditionalAccessFlag = 1 << 7
 		}
 
 		public readonly AType ArgType;
@@ -63,12 +58,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		public bool IsDefaultArgument {
 			get { return ArgType == AType.Default; }
-		}
-
-		public bool IsExtensionType {
-			get {
-				return (ArgType & AType.ExtensionType) == AType.ExtensionType;
-			}
 		}
 
 		public Parameter.Modifier Modifier {
@@ -116,13 +105,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		public virtual void Emit (EmitContext ec)
 		{
 			if (!IsByRef) {
-				if (ArgType == AType.ExtensionTypeConditionalAccess) {
-					var ie = new InstanceEmitter (Expr, false);
-					ie.Emit (ec, true);
-				} else {
-					Expr.Emit (ec);
-				}
-
+				Expr.Emit (ec);
 				return;
 			}
 
@@ -291,16 +274,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			public void AddOrdered (MovableArgument arg)
 			{
 				ordered.Add (arg);
-			}
-
-			public override void FlowAnalysis (FlowAnalysisContext fc, List<MovableArgument> movable = null)
-			{
-				foreach (var arg in ordered) {
-					if (arg.ArgType != Argument.AType.Out)
-						arg.FlowAnalysis (fc);
-				}
-
-				base.FlowAnalysis (fc, ordered);
 			}
 
 			public override Arguments Emit (EmitContext ec, bool dup_args, bool prepareAwait)
@@ -524,7 +497,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			return null;
 		}
 
-		public virtual void FlowAnalysis (FlowAnalysisContext fc, List<MovableArgument> movable = null)
+		public void FlowAnalysis (FlowAnalysisContext fc)
 		{
 			bool has_out = false;
 			foreach (var arg in args) {
@@ -533,14 +506,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					continue;
 				}
 
-				if (movable == null) {
-					arg.FlowAnalysis (fc);
-					continue;
-				}
-
-				var ma = arg as MovableArgument;
-				if (ma != null && !movable.Contains (ma))
-					arg.FlowAnalysis (fc);
+				arg.FlowAnalysis (fc);
 			}
 
 			if (!has_out)

@@ -57,22 +57,22 @@ namespace ICSharpCode.NRefactory.CSharp
 		public ErrorNode ()
 		{
 		}
-
-		public override void AcceptVisitor(IAstVisitor visitor)
+		
+		public override void AcceptVisitor (IAstVisitor visitor)
 		{
-			visitor.VisitErrorNode(this);
 		}
-
-		public override T AcceptVisitor<T>(IAstVisitor<T> visitor)
+			
+		public override T AcceptVisitor<T> (IAstVisitor<T> visitor)
 		{
-			return visitor.VisitErrorNode(this);
+			return default (T);
 		}
-
-		public override S AcceptVisitor<T, S>(IAstVisitor<T, S> visitor, T data)
+		
+		public override S AcceptVisitor<T, S> (IAstVisitor<T, S> visitor, T data)
 		{
-			return visitor.VisitErrorNode(this, data);
+			// nothing
+			return default (S);
 		}
-
+			
 		protected internal override bool DoMatch(AstNode other, PatternMatching.Match match)
 		{
 			var o = other as ErrorNode;

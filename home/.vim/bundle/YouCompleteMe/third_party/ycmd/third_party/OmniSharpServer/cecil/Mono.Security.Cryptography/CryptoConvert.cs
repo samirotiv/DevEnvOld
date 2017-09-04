@@ -27,12 +27,10 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#if !READ_ONLY
-
-#if !NET_CORE
-
 using System;
 using System.Security.Cryptography;
+
+#if !(SILVERLIGHT || READ_ONLY)
 
 namespace Mono.Security.Cryptography {
 
@@ -141,7 +139,7 @@ namespace Mono.Security.Cryptography {
 				rsa = RSA.Create ();
 				rsa.ImportParameters (rsap);
 			}
-			catch (CryptographicException) {
+			catch (CryptographicException ce) {
 				// this may cause problem when this code is run under
 				// the SYSTEM identity on Windows (e.g. ASP.NET). See
 				// http://bugzilla.ximian.com/show_bug.cgi?id=77559
@@ -248,6 +246,3 @@ namespace Mono.Security.Cryptography {
 }
 
 #endif
-
-#endif
-

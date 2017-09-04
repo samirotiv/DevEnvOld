@@ -13,7 +13,6 @@
 ##############################################################################
 import asyncore
 import socket
-import threading
 import time
 import traceback
 
@@ -23,6 +22,8 @@ from waitress.buffers import (
 )
 
 from waitress.parser import HTTPRequestParser
+
+from waitress.compat import thread
 
 from waitress.task import (
     ErrorTask,
@@ -72,9 +73,9 @@ class HTTPChannel(logging_dispatcher, object):
         self.creation_time = self.last_activity = time.time()
 
         # task_lock used to push/pop requests
-        self.task_lock = threading.Lock()
+        self.task_lock = thread.allocate_lock()
         # outbuf_lock used to access any outbuf
-        self.outbuf_lock = threading.Lock()
+        self.outbuf_lock = thread.allocate_lock()
 
         asyncore.dispatcher.__init__(self, sock, map=map)
 
@@ -220,7 +221,7 @@ class HTTPChannel(logging_dispatcher, object):
     def _flush_some_if_lockable(self):
         # Since our task may be appending to the outbuf, we try to acquire
         # the lock, but we don't block if we can't.
-        locked = self.outbuf_lock.acquire(False)
+        locked = self.outbuf_lock.acquire(0)
         if locked:
             try:
                 self._flush_some()
@@ -249,8 +250,6 @@ class HTTPChannel(logging_dispatcher, object):
                             'Unexpected error when closing an outbuf')
                     continue # pragma: no cover (coverage bug, it is hit)
                 else:
-                    if hasattr(outbuf, 'prune'):
-                        outbuf.prune()
                     dobreak = True
 
             while outbuflen > 0:

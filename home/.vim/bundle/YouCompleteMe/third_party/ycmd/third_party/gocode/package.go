@@ -20,20 +20,18 @@ type package_parser interface {
 //-------------------------------------------------------------------------
 
 type package_file_cache struct {
-	name        string // file name
-	import_name string
-	mtime       int64
-	defalias    string
+	name     string // file name
+	mtime    int64
+	defalias string
 
 	scope  *scope
 	main   *decl // package declaration
 	others map[string]*decl
 }
 
-func new_package_file_cache(absname, name string) *package_file_cache {
+func new_package_file_cache(name string) *package_file_cache {
 	m := new(package_file_cache)
-	m.name = absname
-	m.import_name = name
+	m.name = name
 	m.mtime = 0
 	m.defalias = ""
 	return m
@@ -94,7 +92,7 @@ func (m *package_file_cache) update_cache() {
 }
 
 func (m *package_file_cache) process_package_data(data []byte) {
-	m.scope = new_named_scope(g_universe_scope, m.name)
+	m.scope = new_scope(g_universe_scope)
 
 	// find import section
 	i := bytes.Index(data, []byte{'\n', '$', '$'})
@@ -128,10 +126,9 @@ func (m *package_file_cache) process_package_data(data []byte) {
 		pp = &p
 	}
 
-	prefix := "!" + m.name + "!"
 	pp.parse_export(func(pkg string, decl ast.Decl) {
 		anonymify_ast(decl, decl_foreign, m.scope)
-		if pkg == "" || strings.HasPrefix(pkg, prefix) {
+		if pkg == "" || strings.HasPrefix(pkg, "#") {
 			// main package
 			add_ast_decl_to_package(m.main, decl, m.scope)
 		} else {
@@ -144,12 +141,12 @@ func (m *package_file_cache) process_package_data(data []byte) {
 	})
 
 	// hack, add ourselves to the package scope
-	mainName := "!" + m.name + "!" + m.defalias
+	mainName := "#" + m.defalias
 	m.add_package_to_scope(mainName, m.name)
 
 	// replace dummy package decls in package scope to actual packages
 	for key := range m.scope.entities {
-		if !strings.HasPrefix(key, "!") {
+		if !strings.HasPrefix(key, "#") && !strings.HasPrefix(key, "!") {
 			continue
 		}
 		pkg, ok := m.others[key]
@@ -171,7 +168,7 @@ func add_ast_decl_to_package(pkg *decl, decl ast.Decl, scope *scope) {
 		for i, name := range data.names {
 			typ, v, vi := data.type_value_index(i)
 
-			d := new_decl_full(name.Name, class, decl_foreign|ast_decl_flags(data.decl), typ, v, vi, scope)
+			d := new_decl_full(name.Name, class, decl_foreign, typ, v, vi, scope)
 			if d == nil {
 				return
 			}
@@ -221,16 +218,16 @@ func new_package_cache() package_cache {
 // In case if package is not in the cache, it creates one and adds one to the cache.
 func (c package_cache) append_packages(ps map[string]*package_file_cache, pkgs []package_import) {
 	for _, m := range pkgs {
-		if _, ok := ps[m.abspath]; ok {
+		if _, ok := ps[m.path]; ok {
 			continue
 		}
 
-		if mod, ok := c[m.abspath]; ok {
-			ps[m.abspath] = mod
+		if mod, ok := c[m.path]; ok {
+			ps[m.path] = mod
 		} else {
-			mod = new_package_file_cache(m.abspath, m.path)
-			ps[m.abspath] = mod
-			c[m.abspath] = mod
+			mod = new_package_file_cache(m.path)
+			ps[m.path] = mod
+			c[m.path] = mod
 		}
 	}
 }
@@ -243,6 +240,11 @@ package unsafe
 	func @"".Offsetof (? any) uintptr
 	func @"".Sizeof (? any) uintptr
 	func @"".Alignof (? any) uintptr
+	func @"".Typeof (i interface { }) interface { }
+	func @"".Reflect (i interface { }) (typ interface { }, addr @"".Pointer)
+	func @"".Unreflect (typ interface { }, addr @"".Pointer) interface { }
+	func @"".New (typ interface { }) @"".Pointer
+	func @"".NewArray (typ interface { }, n int) @"".Pointer
 
 $$
 `)

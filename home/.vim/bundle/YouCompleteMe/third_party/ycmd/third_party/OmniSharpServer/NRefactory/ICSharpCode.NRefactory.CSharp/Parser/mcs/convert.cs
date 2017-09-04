@@ -20,22 +20,13 @@ using IKVM.Reflection.Emit;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	//
 	// A container class for all the conversion operations
 	//
 	static class Convert
 	{
-		[Flags]
-		public enum UserConversionRestriction
-		{
-			None = 0,
-			ImplicitOnly = 1,
-			ProbingOnly = 1 << 1,
-			NullableSourceOnly = 1 << 2
-
-		}
 		//
 		// From a one-dimensional array-type S[] to System.Collections.IList<T> and base
 		// interfaces of this interface, provided there is an implicit reference conversion
@@ -80,14 +71,19 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			// From T to a type parameter U, provided T depends on U
 			//
 			if (target_type.IsGenericParameter) {
-				if (expr_type.TypeArguments != null && expr_type.HasDependencyOn (target_type)) {
-					if (expr == null)
-						return EmptyExpression.Null;
+				if (expr_type.TypeArguments != null) {
+					foreach (var targ in expr_type.TypeArguments) {
+						if (!TypeSpecComparer.Override.IsEqual (target_type, targ))
+							continue;
 
-					if (expr_type.IsReferenceType && !((TypeParameterSpec) target_type).IsReferenceType)
-						return new BoxedCast (expr, target_type);
+						if (expr == null)
+							return EmptyExpression.Null;
 
-					return new ClassCast (expr, target_type);
+						if (expr_type.IsReferenceType && !((TypeParameterSpec)target_type).IsReferenceType)
+							return new BoxedCast (expr, target_type);
+
+						return new ClassCast (expr, target_type);
+					}
 				}
 
 				return null;
@@ -135,35 +131,34 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			return null;
 		}
 
-		static Expression ExplicitTypeParameterConversionFromT (Expression source, TypeSpec source_type, TypeSpec target_type)
+		static Expression ExplicitTypeParameterConversion (Expression source, TypeSpec source_type, TypeSpec target_type)
 		{
 			var target_tp = target_type as TypeParameterSpec;
 			if (target_tp != null) {
-				//
-				// From a type parameter U to T, provided T depends on U
-				//
-				if (target_tp.TypeArguments != null && target_tp.HasDependencyOn (source_type)) {
-					return source == null ? EmptyExpression.Null : new ClassCast (source, target_type);
+				if (target_tp.TypeArguments != null) {
+					foreach (var targ in target_tp.TypeArguments) {
+						if (!TypeSpecComparer.Override.IsEqual (source_type, targ))
+							continue;
+
+						return source == null ? EmptyExpression.Null : new ClassCast (source, target_type);
+					}
 				}
+/*
+				if (target_tp.Interfaces != null) {
+					foreach (TypeSpec iface in target_tp.Interfaces) {
+						if (!TypeManager.IsGenericParameter (iface))
+							continue;
+
+						if (TypeManager.IsSubclassOf (source_type, iface))
+							return source == null ? EmptyExpression.Null : new ClassCast (source, target_type, true);
+					}
+				}
+*/
+				return null;
 			}
 
-			//
-			// From T to any interface-type I provided there is not already an implicit conversion from T to I
-			//
 			if (target_type.IsInterface)
 				return source == null ? EmptyExpression.Null : new ClassCast (source, target_type, true);
-
-			return null;
-		}
-
-		static Expression ExplicitTypeParameterConversionToT (Expression source, TypeSpec source_type, TypeParameterSpec target_type)
-		{
-			//
-			// From the effective base class C of T to T and from any base class of C to T
-			//
-			var effective = target_type.GetEffectiveBase ();
-			if (TypeSpecComparer.IsEqual (effective, source_type) || TypeSpec.IsBaseClass (effective, source_type, false))
-				return source == null ? EmptyExpression.Null : new ClassCast (source, target_type);
 
 			return null;
 		}
@@ -345,7 +340,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					if (target_type.Kind == MemberKind.InternalCompilerType)
 						return target_type.BuiltinType == BuiltinTypeSpec.Type.Dynamic;
 
-					return TypeSpec.IsReferenceType (target_type) || target_type.Kind == MemberKind.PointerType;
+					return TypeSpec.IsReferenceType (target_type);
 				}
 
 				//
@@ -684,7 +679,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		//
 		public static bool ImplicitConversionExists (ResolveContext ec, Expression expr, TypeSpec target_type)
 		{
-			if (ImplicitStandardConversionExists (ec, expr, target_type))
+			if (ImplicitStandardConversionExists (expr, target_type))
 				return true;
 
 			if (expr.Type == InternalType.AnonymousMethod) {
@@ -695,27 +690,21 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				return ame.ImplicitStandardConversionExists (ec, target_type);
 			}
 			
-			// Conversion from __arglist to System.ArgIterator
-			if (expr.Type == InternalType.Arglist)
-				return target_type == ec.Module.PredefinedTypes.ArgIterator.TypeSpec;
-
-			return UserDefinedConversion (ec, expr, target_type,
-				UserConversionRestriction.ImplicitOnly | UserConversionRestriction.ProbingOnly, Location.Null) != null;
-		}
-
-		public static bool ImplicitStandardConversionExists (ResolveContext rc, Expression expr, TypeSpec target_type)
-		{
 			if (expr.eclass == ExprClass.MethodGroup) {
-				if (target_type.IsDelegate && rc.Module.Compiler.Settings.Version != LanguageVersion.ISO_1) {
+				if (target_type.IsDelegate && ec.Module.Compiler.Settings.Version != LanguageVersion.ISO_1) {
 					MethodGroupExpr mg = expr as MethodGroupExpr;
 					if (mg != null)
-						return DelegateCreation.ImplicitStandardConversionExists (rc, mg, target_type);
+						return DelegateCreation.ImplicitStandardConversionExists (ec, mg, target_type);
 				}
 
 				return false;
 			}
 
-			return ImplicitStandardConversionExists (expr, target_type);
+			// Conversion from __arglist to System.ArgIterator
+			if (expr.Type == InternalType.Arglist)
+				return target_type == ec.Module.PredefinedTypes.ArgIterator.TypeSpec;
+
+			return UserDefinedConversion (ec, expr, target_type, true, true, Location.Null) != null;
 		}
 
 		//
@@ -926,7 +915,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		// by making use of FindMostEncomp* methods. Applies the correct rules separately
 		// for explicit and implicit conversion operators.
 		//
-		static TypeSpec FindMostSpecificSource (ResolveContext rc, List<MethodSpec> list, TypeSpec sourceType, Expression source, bool apply_explicit_conv_rules)
+		static TypeSpec FindMostSpecificSource (List<MethodSpec> list, TypeSpec sourceType, Expression source, bool apply_explicit_conv_rules)
 		{
 			TypeSpec[] src_types_set = null;
 
@@ -952,16 +941,12 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				var candidate_set = new List<TypeSpec> ();
 
 				foreach (TypeSpec param_type in src_types_set){
-					if (ImplicitStandardConversionExists (rc, source, param_type))
+					if (ImplicitStandardConversionExists (source, param_type))
 						candidate_set.Add (param_type);
 				}
 
-				if (candidate_set.Count != 0) {
-					if (source.eclass == ExprClass.MethodGroup)
-						return InternalType.FakeInternalType;
-
+				if (candidate_set.Count != 0)
 					return FindMostEncompassedType (candidate_set);
-				}
 			}
 
 			//
@@ -1029,7 +1014,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		/// </summary>
 		static public Expression ImplicitUserConversion (ResolveContext ec, Expression source, TypeSpec target, Location loc)
 		{
-			return UserDefinedConversion (ec, source, target, UserConversionRestriction.ImplicitOnly, loc);
+			return UserDefinedConversion (ec, source, target, true, false, loc);
 		}
 
 		/// <summary>
@@ -1037,10 +1022,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		/// </summary>
 		static Expression ExplicitUserConversion (ResolveContext ec, Expression source, TypeSpec target, Location loc)
 		{
-			return UserDefinedConversion (ec, source, target, 0, loc);
+			return UserDefinedConversion (ec, source, target, false, false, loc);
 		}
 
-		static void FindApplicableUserDefinedConversionOperators (ResolveContext rc, IList<MemberSpec> operators, Expression source, TypeSpec target, UserConversionRestriction restr, ref List<MethodSpec> candidates)
+		static void FindApplicableUserDefinedConversionOperators (IList<MemberSpec> operators, Expression source, TypeSpec target, bool implicitOnly, ref List<MethodSpec> candidates)
 		{
 			if (source.Type.IsInterface) {
 				// Neither A nor B are interface-types
@@ -1062,16 +1047,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					continue;
 
 				var t = op.Parameters.Types[0];
-				if (source.Type != t && !ImplicitStandardConversionExists (rc, source, t)) {
-					if ((restr & UserConversionRestriction.ImplicitOnly) != 0)
+				if (source.Type != t && !ImplicitStandardConversionExists (source, t)) {
+					if (implicitOnly)
 						continue;
 
 					if (!ImplicitStandardConversionExists (new EmptyExpression (t), source.Type))
-							continue;
+						continue;
 				}
-
-				if ((restr & UserConversionRestriction.NullableSourceOnly) != 0 && !t.IsNullableType)
-					continue;
 
 				t = op.ReturnType;
 
@@ -1083,7 +1065,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 						t = Nullable.NullableInfo.GetUnderlyingType (t);
 
 					if (!ImplicitStandardConversionExists (new EmptyExpression (t), target)) {
-						if ((restr & UserConversionRestriction.ImplicitOnly) != 0)
+						if (implicitOnly)
 							continue;
 
 						if (texpr == null)
@@ -1104,7 +1086,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		//
 		// User-defined conversions
 		//
-		public static Expression UserDefinedConversion (ResolveContext rc, Expression source, TypeSpec target, UserConversionRestriction restr, Location loc)
+		static Expression UserDefinedConversion (ResolveContext ec, Expression source, TypeSpec target, bool implicitOnly, bool probingOnly, Location loc)
 		{
 			List<MethodSpec> candidates = null;
 
@@ -1116,7 +1098,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			TypeSpec target_type = target;
 			Expression source_type_expr;
 			bool nullable_source = false;
-			var implicitOnly = (restr & UserConversionRestriction.ImplicitOnly) != 0;
 
 			if (source_type.IsNullableType) {
 				// No unwrapping conversion S? -> T for non-reference types
@@ -1142,13 +1123,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 				var operators = MemberCache.GetUserOperator (source_type, Operator.OpType.Implicit, declared_only);
 				if (operators != null) {
-					FindApplicableUserDefinedConversionOperators (rc, operators, source_type_expr, target_type, restr, ref candidates);
+					FindApplicableUserDefinedConversionOperators (operators, source_type_expr, target_type, implicitOnly, ref candidates);
 				}
 
 				if (!implicitOnly) {
 					operators = MemberCache.GetUserOperator (source_type, Operator.OpType.Explicit, declared_only);
 					if (operators != null) {
-						FindApplicableUserDefinedConversionOperators (rc, operators, source_type_expr, target_type, restr, ref candidates);
+						FindApplicableUserDefinedConversionOperators (operators, source_type_expr, target_type, false, ref candidates);
 					}
 				}
 			}
@@ -1158,13 +1139,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 				var operators = MemberCache.GetUserOperator (target_type, Operator.OpType.Implicit, declared_only);
 				if (operators != null) {
-					FindApplicableUserDefinedConversionOperators (rc, operators, source_type_expr, target_type, restr, ref candidates);
+					FindApplicableUserDefinedConversionOperators (operators, source_type_expr, target_type, implicitOnly, ref candidates);
 				}
 
 				if (!implicitOnly) {
 					operators = MemberCache.GetUserOperator (target_type, Operator.OpType.Explicit, declared_only);
 					if (operators != null) {
-						FindApplicableUserDefinedConversionOperators (rc, operators, source_type_expr, target_type, restr, ref candidates);
+						FindApplicableUserDefinedConversionOperators (operators, source_type_expr, target_type, false, ref candidates);
 					}
 				}
 			}
@@ -1186,7 +1167,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				// Pass original source type to find the best match against input type and
 				// not the unwrapped expression
 				//
-				s_x = FindMostSpecificSource (rc, candidates, source.Type, source_type_expr, !implicitOnly);
+				s_x = FindMostSpecificSource (candidates, source.Type, source_type_expr, !implicitOnly);
 				if (s_x == null)
 					return null;
 
@@ -1206,18 +1187,16 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					//
 					// Unless running in probing more
 					//
-					if ((restr & UserConversionRestriction.ProbingOnly) == 0) {
-						MethodSpec ambig_arg = candidates [0];
-						most_specific_operator = candidates [1];
-						/*
+					if (!probingOnly) {
+						MethodSpec ambig_arg = null;
 						foreach (var candidate in candidates) {
 							if (candidate.ReturnType == t_x)
 								most_specific_operator = candidate;
 							else if (candidate.Parameters.Types[0] == s_x)
 								ambig_arg = candidate;
 						}
-						*/
-						rc.Report.Error (457, loc,
+
+						ec.Report.Error (457, loc,
 							"Ambiguous user defined operators `{0}' and `{1}' when converting from `{2}' to `{3}'",
 							ambig_arg.GetSignatureForError (), most_specific_operator.GetSignatureForError (),
 							source.Type.GetSignatureForError (), target.GetSignatureForError ());
@@ -1233,21 +1212,21 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			if (s_x != source_type) {
 				var c = source as Constant;
 				if (c != null) {
-					source = c.Reduce (rc, s_x);
+					source = c.Reduce (ec, s_x);
 					if (source == null)
 						c = null;
 				}
 
 				if (c == null) {
 					source = implicitOnly ?
-						ImplicitConversionStandard (rc, source_type_expr, s_x, loc) :
-						ExplicitConversionStandard (rc, source_type_expr, s_x, loc);
+						ImplicitConversionStandard (ec, source_type_expr, s_x, loc) :
+						ExplicitConversionStandard (ec, source_type_expr, s_x, loc);
 				}
 			} else {
 				source = source_type_expr;
 			}
 
-			source = new UserCast (most_specific_operator, source, loc).Resolve (rc);
+			source = new UserCast (most_specific_operator, source, loc).Resolve (ec);
 
 			//
 			// Convert result type when it's different to best operator return type
@@ -1266,19 +1245,19 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 						var unwrap = Nullable.Unwrap.CreateUnwrapped (source);
 
 						source = implicitOnly ?
-							ImplicitConversionStandard (rc, unwrap, target_type, loc) :
-							ExplicitConversionStandard (rc, unwrap, target_type, loc);
+							ImplicitConversionStandard (ec, unwrap, target_type, loc) :
+							ExplicitConversionStandard (ec, unwrap, target_type, loc);
 
 						if (source == null)
 							return null;
 
 						if (target.IsNullableType)
-							source = new Nullable.LiftedConversion (source, unwrap, target).Resolve (rc);
+							source = new Nullable.LiftedConversion (source, unwrap, target).Resolve (ec);
 					}
 				} else {
 					source = implicitOnly ?
-						ImplicitConversionStandard (rc, source, target_type, loc) :
-						ExplicitConversionStandard (rc, source, target_type, loc);
+						ImplicitConversionStandard (ec, source, target_type, loc) :
+						ExplicitConversionStandard (ec, source, target_type, loc);
 
 					if (source == null)
 						return null;
@@ -1291,7 +1270,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			// only non-nullable type we need to lift it manually
 			//
 			if (nullable_source && !s_x.IsNullableType)
-				return new Nullable.LiftedConversion (source, source_type_expr, target).Resolve (rc);
+				return new Nullable.LiftedConversion (source, source_type_expr, target).Resolve (ec);
 
 			//
 			// Target is of nullable type but source type is not, wrap the result expression
@@ -1472,12 +1451,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			if (expr_type.IsStruct && TypeSpecComparer.IsEqual (expr_type, target_type))
 				return expr_type == target_type ? expr : EmptyCast.Create (expr, target_type);
 
-			var interpolated_string = expr as InterpolatedString;
-			if (interpolated_string != null) {
-				if (target_type == ec.Module.PredefinedTypes.IFormattable.TypeSpec || target_type == ec.Module.PredefinedTypes.FormattableString.TypeSpec)
-					return interpolated_string.ConvertTo (ec, target_type);
-			}
-
 			return null;
 		}
 
@@ -1494,7 +1467,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				return e;
 
 			source.Error_ValueCannotBeConverted (ec, target_type, false);
-
 			return null;
 		}
 
@@ -1848,10 +1820,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				return source == null ? EmptyExpression.Null : new UnboxCast (source, target_type);
 
 			//
-			// Explicit type parameter conversion from T
+			// Explicit type parameter conversion.
 			//
 			if (source_type.Kind == MemberKind.TypeParameter)
-				return ExplicitTypeParameterConversionFromT (source, source_type, target_type);
+				return ExplicitTypeParameterConversion (source, source_type, target_type);
 
 			bool target_is_value_type = target_type.Kind == MemberKind.Struct || target_type.Kind == MemberKind.Enum;
 
@@ -1884,9 +1856,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			//
 			// From any interface-type S to to any class type T, provided T is not
 			// sealed, or provided T implements S.
-			//
-			// This also covers Explicit conversions involving type parameters
-			// section From any interface type to T
 			//
 			if (source_type.Kind == MemberKind.Interface) {
 				if (!target_type.IsSealed || target_type.ImplementsInterface (source_type, true)) {
@@ -1932,23 +1901,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					if (source_array.Rank == target_array.Rank) {
 
 						source_type = source_array.Element;
+						if (!TypeSpec.IsReferenceType (source_type))
+							return null;
+
 						var target_element = target_array.Element;
-
-						//
-						// LAMESPEC: Type parameters are special cased somehow but
-						// only when both source and target elements are type parameters
-						//
-						if ((source_type.Kind & target_element.Kind & MemberKind.TypeParameter) == MemberKind.TypeParameter) {
-							//
-							// Conversion is allowed unless source element type has struct constrain
-							//
-							if (TypeSpec.IsValueType (source_type))
-								return null;
-						} else {
-							if (!TypeSpec.IsReferenceType (source_type))
-								return null;
-						}
-
 						if (!TypeSpec.IsReferenceType (target_element))
 							return null;
 
@@ -2022,10 +1978,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				if (i == tparams.Length)
 					return source == null ? EmptyExpression.Null : new ClassCast (source, target_type);
 			}
-
-			var tps = target_type as TypeParameterSpec;
-			if (tps != null)
-				return ExplicitTypeParameterConversionToT (source, source_type, tps);
 
 			return null;
 		}
@@ -2261,7 +2213,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			}
 			
 			e = ExplicitUserConversion (ec, expr, target_type, loc);
-
 			if (e != null)
 				return e;			
 

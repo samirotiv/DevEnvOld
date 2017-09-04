@@ -22,19 +22,17 @@ import (
 
 // fields must be exported for RPC
 type candidate struct {
-	Name    string
-	Type    string
-	Class   decl_class
-	Package string
+	Name  string
+	Type  string
+	Class decl_class
 }
 
 type out_buffers struct {
-	tmpbuf            *bytes.Buffer
-	candidates        []candidate
-	canonical_aliases map[string]string
-	ctx               *auto_complete_context
-	tmpns             map[string]bool
-	ignorecase        bool
+	tmpbuf     *bytes.Buffer
+	candidates []candidate
+	ctx        *auto_complete_context
+	tmpns      map[string]bool
+	ignorecase bool
 }
 
 func new_out_buffers(ctx *auto_complete_context) *out_buffers {
@@ -42,10 +40,6 @@ func new_out_buffers(ctx *auto_complete_context) *out_buffers {
 	b.tmpbuf = bytes.NewBuffer(make([]byte, 0, 1024))
 	b.candidates = make([]candidate, 0, 64)
 	b.ctx = ctx
-	b.canonical_aliases = make(map[string]string)
-	for _, imp := range b.ctx.current.packages {
-		b.canonical_aliases[imp.abspath] = imp.alias
-	}
 	return b
 }
 
@@ -66,7 +60,7 @@ func (b *out_buffers) Swap(i, j int) {
 	b.candidates[i], b.candidates[j] = b.candidates[j], b.candidates[i]
 }
 
-func (b *out_buffers) append_decl(p, name, pkg string, decl *decl, class decl_class) {
+func (b *out_buffers) append_decl(p, name string, decl *decl, class decl_class) {
 	c1 := !g_config.ProposeBuiltins && decl.scope == g_universe_scope && decl.name != "Error"
 	c2 := class != decl_invalid && decl.class != class
 	c3 := class == decl_invalid && !has_prefix(name, p, b.ignorecase)
@@ -77,17 +71,16 @@ func (b *out_buffers) append_decl(p, name, pkg string, decl *decl, class decl_cl
 		return
 	}
 
-	decl.pretty_print_type(b.tmpbuf, b.canonical_aliases)
+	decl.pretty_print_type(b.tmpbuf)
 	b.candidates = append(b.candidates, candidate{
-		Name:    name,
-		Type:    b.tmpbuf.String(),
-		Class:   decl.class,
-		Package: pkg,
+		Name:  name,
+		Type:  b.tmpbuf.String(),
+		Class: decl.class,
 	})
 	b.tmpbuf.Reset()
 }
 
-func (b *out_buffers) append_embedded(p string, decl *decl, pkg string, class decl_class) {
+func (b *out_buffers) append_embedded(p string, decl *decl, class decl_class) {
 	if decl.embedded == nil {
 		return
 	}
@@ -111,20 +104,20 @@ func (b *out_buffers) append_embedded(p string, decl *decl, pkg string, class de
 		}
 
 		// prevent infinite recursion here
-		if typedecl.is_visited() {
+		if typedecl.flags&decl_visited != 0 {
 			continue
 		}
-		typedecl.set_visited()
+		typedecl.flags |= decl_visited
 		defer typedecl.clear_visited()
 
 		for _, c := range typedecl.children {
 			if _, has := b.tmpns[c.name]; has {
 				continue
 			}
-			b.append_decl(p, c.name, pkg, c, class)
+			b.append_decl(p, c.name, c, class)
 			b.tmpns[c.name] = true
 		}
-		b.append_embedded(p, typedecl, pkg, class)
+		b.append_embedded(p, typedecl, class)
 	}
 
 	if first_level {
@@ -190,12 +183,6 @@ func (c *auto_complete_context) merge_decls() {
 		merge_decls(f.filescope, c.pkg, f.decls)
 		merge_decls_from_packages(c.pkg, f.packages, c.pcache)
 	}
-
-	// special pass for type aliases which also have methods, while this is
-	// valid code, it shouldn't happen a lot in practice, so, whatever
-	// let's move all type alias methods to their first non-alias type down in
-	// the chain
-	propagate_type_alias_methods(c.pkg)
 }
 
 func (c *auto_complete_context) make_decl_set(scope *scope) map[string]*decl {
@@ -210,47 +197,11 @@ func (c *auto_complete_context) get_candidates_from_set(set map[string]*decl, pa
 			continue
 		}
 		value.infer_type()
-		pkgname := ""
-		if pkg, ok := c.pcache[value.name]; ok {
-			pkgname = pkg.import_name
-		}
-		b.append_decl(partial, key, pkgname, value, class)
+		b.append_decl(partial, key, value, class)
 	}
-}
-
-func (c *auto_complete_context) get_candidates_from_decl_alias(cc cursor_context, class decl_class, b *out_buffers) {
-	if cc.decl.is_visited() {
-		return
-	}
-
-	cc.decl = cc.decl.type_dealias()
-	if cc.decl == nil {
-		return
-	}
-
-	cc.decl.set_visited()
-	defer cc.decl.clear_visited()
-
-	c.get_candidates_from_decl(cc, class, b)
-	return
-}
-
-func (c *auto_complete_context) decl_package_import_path(decl *decl) string {
-	if decl == nil || decl.scope == nil {
-		return ""
-	}
-	if pkg, ok := c.pcache[decl.scope.pkgname]; ok {
-		return pkg.import_name
-	}
-	return ""
 }
 
 func (c *auto_complete_context) get_candidates_from_decl(cc cursor_context, class decl_class, b *out_buffers) {
-	if cc.decl.is_alias() {
-		c.get_candidates_from_decl_alias(cc, class, b)
-		return
-	}
-
 	// propose all children of a subject declaration and
 	for _, decl := range cc.decl.children {
 		if cc.decl.class == decl_package && !ast.IsExported(decl.name) {
@@ -262,35 +213,34 @@ func (c *auto_complete_context) get_candidates_from_decl(cc cursor_context, clas
 				continue
 			}
 		}
-		b.append_decl(cc.partial, decl.name, c.decl_package_import_path(decl), decl, class)
+		b.append_decl(cc.partial, decl.name, decl, class)
 	}
 	// propose all children of an underlying struct/interface type
 	adecl := advance_to_struct_or_interface(cc.decl)
 	if adecl != nil && adecl != cc.decl {
 		for _, decl := range adecl.children {
 			if decl.class == decl_var {
-				b.append_decl(cc.partial, decl.name, c.decl_package_import_path(decl), decl, class)
+				b.append_decl(cc.partial, decl.name, decl, class)
 			}
 		}
 	}
 	// propose all children of its embedded types
-	b.append_embedded(cc.partial, cc.decl, c.decl_package_import_path(cc.decl), class)
+	b.append_embedded(cc.partial, cc.decl, class)
 }
 
 func (c *auto_complete_context) get_import_candidates(partial string, b *out_buffers) {
-	currentPackagePath, pkgdirs := g_daemon.context.pkg_dirs()
-	fmt.Println(pkgdirs)
+	pkgdirs := g_daemon.context.pkg_dirs()
 	resultSet := map[string]struct{}{}
 	for _, pkgdir := range pkgdirs {
 		// convert srcpath to pkgpath and get candidates
-		get_import_candidates_dir(pkgdir, filepath.FromSlash(partial), b.ignorecase, currentPackagePath, resultSet)
+		get_import_candidates_dir(pkgdir, filepath.FromSlash(partial), b.ignorecase, resultSet)
 	}
 	for k := range resultSet {
 		b.candidates = append(b.candidates, candidate{Name: k, Class: decl_import})
 	}
 }
 
-func get_import_candidates_dir(root, partial string, ignorecase bool, currentPackagePath string, r map[string]struct{}) {
+func get_import_candidates_dir(root, partial string, ignorecase bool, r map[string]struct{}) {
 	var fpath string
 	var match bool
 	if strings.HasSuffix(partial, "/") {
@@ -309,7 +259,7 @@ func get_import_candidates_dir(root, partial string, ignorecase bool, currentPac
 		if match && !has_prefix(rel, partial, ignorecase) {
 			continue
 		} else if fi[i].IsDir() {
-			get_import_candidates_dir(root, rel+string(filepath.Separator), ignorecase, currentPackagePath, r)
+			get_import_candidates_dir(root, rel+string(filepath.Separator), ignorecase, r)
 		} else {
 			ext := filepath.Ext(name)
 			if ext != ".a" {
@@ -317,9 +267,7 @@ func get_import_candidates_dir(root, partial string, ignorecase bool, currentPac
 			} else {
 				rel = rel[0 : len(rel)-2]
 			}
-			if ipath, ok := vendorlessImportPath(filepath.ToSlash(rel), currentPackagePath); ok {
-				r[ipath] = struct{}{}
-			}
+			r[vendorlessImportPath(filepath.ToSlash(rel))] = struct{}{}
 		}
 	}
 }
@@ -443,52 +391,6 @@ func update_packages(ps map[string]*package_file_cache) {
 	}
 }
 
-func collect_type_alias_methods(d *decl) map[string]*decl {
-	if d == nil || d.is_visited() || !d.is_alias() {
-		return nil
-	}
-	d.set_visited()
-	defer d.clear_visited()
-
-	// add own methods
-	m := map[string]*decl{}
-	for k, v := range d.children {
-		m[k] = v
-	}
-
-	// recurse into more aliases
-	dd := type_to_decl(d.typ, d.scope)
-	for k, v := range collect_type_alias_methods(dd) {
-		m[k] = v
-	}
-
-	return m
-}
-
-func propagate_type_alias_methods(s *scope) {
-	for _, e := range s.entities {
-		if !e.is_alias() {
-			continue
-		}
-
-		methods := collect_type_alias_methods(e)
-		if len(methods) == 0 {
-			continue
-		}
-
-		dd := e.type_dealias()
-		if dd == nil {
-			continue
-		}
-
-		decl := dd.deep_copy()
-		for _, v := range methods {
-			decl.add_child(v)
-		}
-		s.entities[decl.name] = decl
-	}
-}
-
 func merge_decls(filescope *scope, pkg *scope, decls map[string]*decl) {
 	for _, d := range decls {
 		pkg.merge_decl(d)
@@ -498,7 +400,7 @@ func merge_decls(filescope *scope, pkg *scope, decls map[string]*decl) {
 
 func merge_decls_from_packages(pkgscope *scope, pkgs []package_import, pcache package_cache) {
 	for _, p := range pkgs {
-		path, alias := p.abspath, p.alias
+		path, alias := p.path, p.alias
 		if alias != "." {
 			continue
 		}
@@ -516,7 +418,7 @@ func merge_decls_from_packages(pkgscope *scope, pkgs []package_import, pcache pa
 
 func fixup_packages(filescope *scope, pkgs []package_import, pcache package_cache) {
 	for _, p := range pkgs {
-		path, alias := p.abspath, p.alias
+		path, alias := p.path, p.alias
 		if alias == "" {
 			alias = pcache[path].defalias
 		}

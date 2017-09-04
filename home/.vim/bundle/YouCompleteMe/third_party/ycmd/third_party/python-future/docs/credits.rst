@@ -8,7 +8,7 @@ Licence
 The software is distributed under an MIT licence. The text is as follows
 (from ``LICENSE.txt``)::
 
-    Copyright (c) 2013-2016 Python Charmers Pty Ltd, Australia
+    Copyright (c) 2013-2015 Python Charmers Pty Ltd, Australia
     
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -74,7 +74,6 @@ Patches
 - Mystic-Mirage (GitHub)
 - str4d (GitHub)
 - 9seconds (GitHub)
-- Varriount (GitHub)
 
 Suggestions and Feedback
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -83,7 +82,6 @@ Suggestions and Feedback
 - Martijn Faassen
 - Lion Krischer
 - Danielle Madeley
-- Val Markovic
 - wluebbe (GitHub)
 
 
@@ -104,8 +102,6 @@ Other Credits
 
 - The ``raise_`` and ``raise_with_traceback`` functions were contributed by
   Jeff Tratner.
-
-- A working version of ``raise_from`` was contributed by Varriount (GitHub).
 
 - Documentation is generated with `Sphinx <http://sphinx.pocoo.org>`_ using the
   ``sphinx-bootstrap`` theme.

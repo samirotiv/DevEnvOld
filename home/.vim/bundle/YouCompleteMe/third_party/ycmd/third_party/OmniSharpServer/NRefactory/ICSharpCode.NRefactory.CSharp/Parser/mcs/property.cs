@@ -29,7 +29,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	// It is used as a base class for all property based members
 	// This includes properties, indexers, and events
@@ -81,8 +81,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				Report.Error (82, Location, "A member `{0}' is already reserved", conflict.GetSignatureForError ());
 			}
 		}
-
-		public abstract void PrepareEmit ();
 
 		protected override bool VerifyClsCompliance ()
 		{
@@ -199,7 +197,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			{
 			}
 
-			public override void Define (TypeContainer parent)
+			public override MethodBuilder Define (TypeContainer parent)
 			{
 				base.Define (parent);
 
@@ -207,7 +205,12 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 				method_data = new MethodData (method, ModFlags, flags, this);
 
-				method_data.Define (parent.PartialContainer, method.GetFullName (MemberName));
+				if (!method_data.Define (parent.PartialContainer, method.GetFullName (MemberName)))
+					return null;
+
+				method_data.DefineMethodBuilder (parent.PartialContainer, ParameterInfo);
+
+				return method_data.MethodBuilder;
 			}
 
 			public override TypeSpec ReturnType {
@@ -259,7 +262,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			    }
 			}
 
-			public override void Define (TypeContainer parent)
+			public override MethodBuilder Define (TypeContainer parent)
 			{
 				parameters.Resolve (this);
 				
@@ -269,7 +272,12 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 				method_data = new MethodData (method, ModFlags, flags, this);
 
-				method_data.Define (parent.PartialContainer, method.GetFullName (MemberName));
+				if (!method_data.Define (parent.PartialContainer, method.GetFullName (MemberName)))
+					return null;
+
+				method_data.DefineMethodBuilder (parent.PartialContainer, ParameterInfo);
+
+				return method_data.MethodBuilder;
 			}
 
 			public override TypeSpec ReturnType {
@@ -326,7 +334,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				return method.IsClsComplianceRequired ();
 			}
 
-			public virtual void Define (TypeContainer parent)
+			public virtual MethodBuilder Define (TypeContainer parent)
 			{
 				var container = parent.PartialContainer;
 
@@ -337,22 +345,18 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					ModFlags |= method.ModFlags;
 					flags = method.flags;
 				} else {
+					if (container.Kind == MemberKind.Interface)
+						Report.Error (275, Location, "`{0}': accessibility modifiers may not be used on accessors in an interface",
+							GetSignatureForError ());
+					else if ((method.ModFlags & Modifiers.ABSTRACT) != 0 && (ModFlags & Modifiers.PRIVATE) != 0) {
+						Report.Error (442, Location, "`{0}': abstract properties cannot have private accessors", GetSignatureForError ());
+					}
+
 					CheckModifiers (ModFlags);
 					ModFlags |= (method.ModFlags & (~Modifiers.AccessibilityMask));
 					ModFlags |= Modifiers.PROPERTY_CUSTOM;
-
-					if (container.Kind == MemberKind.Interface) {
-						Report.Error (275, Location, "`{0}': accessibility modifiers may not be used on accessors in an interface",
-							GetSignatureForError ());
-					} else if ((ModFlags & Modifiers.PRIVATE) != 0) {
-						if ((method.ModFlags & Modifiers.ABSTRACT) != 0) {
-							Report.Error (442, Location, "`{0}': abstract properties cannot have private accessors", GetSignatureForError ());
-						}
-
-						ModFlags &= ~Modifiers.VIRTUAL;
-					}
-
-					flags = ModifiersExtensions.MethodAttr (ModFlags) | MethodAttributes.SpecialName;
+					flags = ModifiersExtensions.MethodAttr (ModFlags);
+					flags |= (method.flags & (~MethodAttributes.MemberAccessMask));
 				}
 
 				CheckAbstractAndExtern (block != null);
@@ -365,6 +369,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					if (Compiler.Settings.WriteMetadataOnly)
 						block = null;
 				}
+
+				return null;
 			}
 
 			public bool HasCustomAccessModifier {
@@ -516,16 +522,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			// Check base property accessors conflict
 			//
 			var base_prop = (PropertySpec) base_member;
-			if (Get == null) {
-				if ((ModFlags & Modifiers.SEALED) != 0 && base_prop.HasGet && !base_prop.Get.IsAccessible (this)) {
-					// TODO: Should be different error code but csc uses for some reason same
-					Report.SymbolRelatedToPreviousError (base_prop);
-					Report.Error (545, Location,
-						"`{0}': cannot override because `{1}' does not have accessible get accessor",
-						GetSignatureForError (), base_prop.GetSignatureForError ());
-					ok = false;
-				}
-			} else {
+			if (Get != null) {
 				if (!base_prop.HasGet) {
 					if (ok) {
 						Report.SymbolRelatedToPreviousError (base_prop);
@@ -535,34 +532,14 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 						ok = false;
 					}
 				} else if (Get.HasCustomAccessModifier || base_prop.HasDifferentAccessibility) {
-					if (!base_prop.Get.IsAccessible (this)) {
-						// Same as csc but it should be different error code
-						Report.Error (115, Get.Location, "`{0}' is marked as an override but no accessible `get' accessor found to override",
-							GetSignatureForError ());
-						ok = false;
-					} else if (!CheckAccessModifiers (Get, base_prop.Get)) {
+					if (!CheckAccessModifiers (Get, base_prop.Get)) {
 						Error_CannotChangeAccessModifiers (Get, base_prop.Get);
 						ok = false;
 					}
 				}
 			}
 
-			if (Set == null) {
-				if ((ModFlags & Modifiers.SEALED) != 0 && base_prop.HasSet && !base_prop.Set.IsAccessible (this)) {
-					// TODO: Should be different error code but csc uses for some reason same
-					Report.SymbolRelatedToPreviousError (base_prop);
-					Report.Error (546, Location,
-						"`{0}': cannot override because `{1}' does not have accessible set accessor",
-						GetSignatureForError (), base_prop.GetSignatureForError ());
-					ok = false;
-				}
-
-				if (Get.IsCompilerGenerated) {
-					Report.Error (8080, Location, "`{0}': Auto-implemented properties must override all accessors of the overridden property",
-						GetSignatureForError ());
-					ok = false;
-				}
-			} else {
+			if (Set != null) {
 				if (!base_prop.HasSet) {
 					if (ok) {
 						Report.SymbolRelatedToPreviousError (base_prop);
@@ -572,12 +549,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 						ok = false;
 					}
 				} else if (Set.HasCustomAccessModifier || base_prop.HasDifferentAccessibility) {
-					if (!base_prop.Set.IsAccessible (this)) {
-						// Same as csc but it should be different error code
-						Report.Error (115, Set.Location, "`{0}' is marked as an override but no accessible `set' accessor found to override",
-							GetSignatureForError ());
-						ok = false;
-					} else if (!CheckAccessModifiers (Set, base_prop.Set)) {
+					if (!CheckAccessModifiers (Set, base_prop.Set)) {
 						Error_CannotChangeAccessModifiers (Set, base_prop.Set);
 						ok = false;
 					}
@@ -652,14 +624,24 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 			if (Get != null) {
 				spec.Get = Get.Spec;
-				Parent.MemberCache.AddMember (this, Get.Spec.Name, Get.Spec);
+
+				var method = Get.Spec.GetMetaInfo () as MethodBuilder;
+				if (method != null) {
+					PropertyBuilder.SetGetMethod (method);
+					Parent.MemberCache.AddMember (this, method.Name, Get.Spec);
+				}
 			} else {
 				CheckMissingAccessor (kind, parameters, true);
 			}
 
 			if (Set != null) {
 				spec.Set = Set.Spec;
-				Parent.MemberCache.AddMember (this, Set.Spec.Name, Set.Spec);
+
+				var method = Set.Spec.GetMetaInfo () as MethodBuilder;
+				if (method != null) {
+					PropertyBuilder.SetSetMethod (method);
+					Parent.MemberCache.AddMember (this, method.Name, Set.Spec);
+				}
 			} else {
 				CheckMissingAccessor (kind, parameters, false);
 			}
@@ -699,25 +681,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			}
 		}
 
-		public override void PrepareEmit ()
-		{
-			AccessorFirst.PrepareEmit ();
-			if (AccessorSecond != null)
-				AccessorSecond.PrepareEmit ();
-
-			if (get != null) {
-				var method = Get.Spec.GetMetaInfo () as MethodBuilder;
-				if (method != null)
-					PropertyBuilder.SetGetMethod (method);
-			}
-
-			if (set != null) {
-				var method = Set.Spec.GetMetaInfo () as MethodBuilder;
-				if (method != null)
-					PropertyBuilder.SetSetMethod (method);
-			}
-		}
-
 		protected override void SetMemberName (MemberName new_name)
 		{
 			base.SetMemberName (new_name);
@@ -748,18 +711,16 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			
 	public class Property : PropertyBase
 	{
-		public sealed class BackingFieldDeclaration : Field
+		public sealed class BackingField : Field
 		{
 			readonly Property property;
-			const Modifiers DefaultModifiers = Modifiers.BACKING_FIELD | Modifiers.COMPILER_GENERATED | Modifiers.PRIVATE | Modifiers.DEBUGGER_HIDDEN;
 
-			public BackingFieldDeclaration (Property p, bool readOnly)
-				: base (p.Parent, p.type_expr, DefaultModifiers | (p.ModFlags & (Modifiers.STATIC | Modifiers.UNSAFE)),
+			public BackingField (Property p)
+				: base (p.Parent, p.type_expr,
+				Modifiers.BACKING_FIELD | Modifiers.COMPILER_GENERATED | Modifiers.PRIVATE | (p.ModFlags & (Modifiers.STATIC | Modifiers.UNSAFE)),
 				new MemberName ("<" + p.GetFullName (p.MemberName) + ">k__BackingField", p.Location), null)
 			{
 				this.property = p;
-				if (readOnly)
-					ModFlags |= Modifiers.READONLY;
 			}
 
 			public Property OriginalProperty {
@@ -776,6 +737,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		static readonly string[] attribute_target_auto = new string[] { "property", "field" };
 
+		Field backing_field;
+
 		public Property (TypeDefinition parent, FullNamedExpression type, Modifiers mod,
 				 MemberName name, Attributes attrs)
 			: base (parent, type, mod,
@@ -786,10 +749,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		{
 		}
 
-		public BackingFieldDeclaration BackingField { get; private set; }
-
-		public Expression Initializer { get; set; }
-
 		public override void Accept (StructuralVisitor visitor)
 		{
 			visitor.Visit (this);
@@ -798,7 +757,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		public override void ApplyAttributeBuilder (Attribute a, MethodSpec ctor, byte[] cdata, PredefinedAttributes pa)
 		{
 			if (a.Target == AttributeTargets.Field) {
-				BackingField.ApplyAttributeBuilder (a, ctor, cdata, pa);
+				backing_field.ApplyAttributeBuilder (a, ctor, cdata, pa);
 				return;
 			}
 
@@ -808,20 +767,14 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		void CreateAutomaticProperty ()
 		{
 			// Create backing field
-			BackingField = new BackingFieldDeclaration (this, Initializer == null && Set == null);
-			if (!BackingField.Define ())
+			backing_field = new BackingField (this);
+			if (!backing_field.Define ())
 				return;
 
-			if (Initializer != null) {
-				BackingField.Initializer = Initializer;
-				Parent.RegisterFieldForInitialization (BackingField, new FieldInitializer (BackingField, Initializer, Location));
-				BackingField.ModFlags |= Modifiers.READONLY;
-			}
+			Parent.PartialContainer.Members.Add (backing_field);
 
-			Parent.PartialContainer.Members.Add (BackingField);
-
-			FieldExpr fe = new FieldExpr (BackingField, Location);
-			if ((BackingField.ModFlags & Modifiers.STATIC) == 0)
+			FieldExpr fe = new FieldExpr (backing_field, Location);
+			if ((backing_field.ModFlags & Modifiers.STATIC) == 0)
 				fe.InstanceExpression = new CompilerGeneratedThis (Parent.CurrentType, Location);
 
 			//
@@ -832,15 +785,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			Get.Block = new ToplevelBlock (Compiler, ParametersCompiled.EmptyReadOnlyParameters, Location.Null);
 			Return r = new Return (fe, Get.Location);
 			Get.Block.AddStatement (r);
-			Get.ModFlags |= Modifiers.COMPILER_GENERATED;
 
 			// Create set block
-			if (Set != null) {
-				Set.Block = new ToplevelBlock (Compiler, Set.ParameterInfo, Location.Null);
-				Assign a = new SimpleAssign (fe, new SimpleName ("value", Location.Null), Location.Null);
-				Set.Block.AddStatement (new StatementExpression (a, Set.Location));
-				Set.ModFlags |= Modifiers.COMPILER_GENERATED;
-			}
+			Set.Block = new ToplevelBlock (Compiler, Set.ParameterInfo, Location.Null);
+			Assign a = new SimpleAssign (fe, new SimpleName ("value", Location.Null), Location.Null);
+			Set.Block.AddStatement (new StatementExpression (a, Set.Location));
 		}
 		
 		public override bool Define ()
@@ -850,32 +799,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 			flags |= MethodAttributes.HideBySig | MethodAttributes.SpecialName;
 
-			bool auto = AccessorFirst.Block == null && (AccessorSecond == null || AccessorSecond.Block == null) &&
-				(ModFlags & (Modifiers.ABSTRACT | Modifiers.EXTERN)) == 0;
+			if (!IsInterface && (ModFlags & (Modifiers.ABSTRACT | Modifiers.EXTERN)) == 0 &&
+				AccessorSecond != null && Get.Block == null && Set.Block == null) {
+				if (Compiler.Settings.Version <= LanguageVersion.ISO_2)
+					Report.FeatureIsNotAvailable (Compiler, Location, "automatically implemented properties");
 
-			if (Initializer != null) {
-				if (!auto)
-					Report.Error (8050, Location, "`{0}': Only auto-implemented properties can have initializers",
-						GetSignatureForError ());
-
-				if (IsInterface)
-					Report.Error (8052, Location, "`{0}': Properties inside interfaces cannot have initializers",
-						GetSignatureForError ());
-
-				if (Compiler.Settings.Version < LanguageVersion.V_6)
-					Report.FeatureIsNotAvailable (Compiler, Location, "auto-implemented property initializer");
-			}
-
-			if (auto) {
-				if (Get == null) {
-					Report.Error (8051, Location, "Auto-implemented property `{0}' must have get accessor",
-						GetSignatureForError ());
-					return false;
-				}
-
-				if (Compiler.Settings.Version < LanguageVersion.V_3 && Initializer == null)
-					Report.FeatureIsNotAvailable (Compiler, Location, "auto-implemented properties");
-
+				Get.ModFlags |= Modifiers.COMPILER_GENERATED;
+				Set.ModFlags |= Modifiers.COMPILER_GENERATED;
 				CreateAutomaticProperty ();
 			}
 
@@ -929,10 +859,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			{
 			}
 
-			public override void Define (TypeContainer ds)
+			public override MethodBuilder Define (TypeContainer ds)
 			{
 				CheckAbstractAndExtern (block != null);
-				base.Define (ds);
+				return base.Define (ds);
 			}
 			
 			public override string GetSignatureForError ()
@@ -1055,22 +985,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					Location)));
 				args.Add (new Argument (new LocalVariableReference (obj1, Location)));
 
-				var cas = Module.PredefinedMembers.InterlockedCompareExchange_T.Get ();
-				if (cas == null) {
-					if (Module.PredefinedMembers.MonitorEnter_v4.Get () != null || Module.PredefinedMembers.MonitorEnter.Get () != null) {
-						// Workaround for cripled (e.g. microframework) mscorlib without CompareExchange
-						body.AddStatement (new Lock (
-							block.GetParameterReference (0, Location),
-							new StatementExpression (new SimpleAssign (
-								f_expr, args [1].Expr, Location), Location), Location));
-					} else {
-						Module.PredefinedMembers.InterlockedCompareExchange_T.Resolve (Location);
-					}
-				} else {
-					body.AddStatement (new StatementExpression (new SimpleAssign (
-						new LocalVariableReference (obj1, Location),
-						new Invocation (MethodGroupExpr.CreatePredefined (cas, cas.DeclaringType, Location), args))));
-				}
+				var cas = Module.PredefinedMembers.InterlockedCompareExchange_T.Resolve (Location);
+				if (cas == null)
+					return;
+
+				body.AddStatement (new StatementExpression (new SimpleAssign (
+					new LocalVariableReference (obj1, Location),
+					new Invocation (MethodGroupExpr.CreatePredefined (cas, cas.DeclaringType, Location), args))));
 			}
 		}
 
@@ -1208,6 +1129,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				return true;
 			}
 
+			if (Add.IsInterfaceImplementation)
+				SetIsUsed ();
+
 			backing_field = new Field (Parent,
 				new TypeExpression (MemberType, Location),
 				Modifiers.BACKING_FIELD | Modifiers.COMPILER_GENERATED | Modifiers.PRIVATE | (ModFlags & (Modifiers.STATIC | Modifiers.UNSAFE)),
@@ -1281,7 +1205,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				return method.IsClsComplianceRequired ();
 			}
 
-			public virtual void Define (TypeContainer parent)
+			public virtual MethodBuilder Define (TypeContainer parent)
 			{
 				// Fill in already resolved event type to speed things up and
 				// avoid confusing duplicate errors
@@ -1292,13 +1216,17 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					method.flags | MethodAttributes.HideBySig | MethodAttributes.SpecialName, this);
 
 				if (!method_data.Define (parent.PartialContainer, method.GetFullName (MemberName)))
-					return;
+					return null;
+
+				method_data.DefineMethodBuilder (parent.PartialContainer, ParameterInfo);
 
 				if (Compiler.Settings.WriteMetadataOnly)
 					block = null;
 
 				Spec = new MethodSpec (MemberKind.Method, parent.PartialContainer.Definition, this, ReturnType, ParameterInfo, method.ModFlags);
 				Spec.IsAccessor = true;
+
+				return method_data.MethodBuilder;
 			}
 
 			public override TypeSpec ReturnType {
@@ -1310,12 +1238,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			public override ObsoleteAttribute GetAttributeObsolete ()
 			{
 				return method.GetAttributeObsolete ();
-			}
-
-			public MethodData MethodData {
-				get {
-					return method_data;
-				}
 			}
 
 			public override string[] ValidAttributeTargets {
@@ -1416,16 +1338,23 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			//
 			// Now define the accessors
 			//
-			add.Define (Parent);
-			remove.Define (Parent);
+			var AddBuilder = Add.Define (Parent);
+			if (AddBuilder == null)
+				return false;
+
+			var RemoveBuilder = remove.Define (Parent);
+			if (RemoveBuilder == null)
+				return false;
 
 			EventBuilder = Parent.TypeBuilder.DefineEvent (GetFullName (MemberName), EventAttributes.None, MemberType.GetMetaInfo ());
+			EventBuilder.SetAddOnMethod (AddBuilder);
+			EventBuilder.SetRemoveOnMethod (RemoveBuilder);
 
 			spec = new EventSpec (Parent.Definition, this, MemberType, ModFlags, Add.Spec, remove.Spec);
 
 			Parent.MemberCache.AddMember (this, GetFullName (MemberName), spec);
-			Parent.MemberCache.AddMember (this, Add.Spec.Name, Add.Spec);
-			Parent.MemberCache.AddMember (this, Remove.Spec.Name, remove.Spec);
+			Parent.MemberCache.AddMember (this, AddBuilder.Name, Add.Spec);
+			Parent.MemberCache.AddMember (this, RemoveBuilder.Name, remove.Spec);
 
 			return true;
 		}
@@ -1445,15 +1374,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			Remove.Emit (Parent);
 
 			base.Emit ();
-		}
-
-		public override void PrepareEmit ()
-		{
-			add.PrepareEmit ();
-			remove.PrepareEmit ();
-
-			EventBuilder.SetAddOnMethod (add.MethodData.MethodBuilder);
-			EventBuilder.SetRemoveOnMethod (remove.MethodData.MethodBuilder);
 		}
 
 		public override void WriteDebugSymbol (MonoSymbolFile file)
@@ -1545,7 +1465,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				this.parameters = parameters;
 			}
 
-			public override void Define (TypeContainer parent)
+			public override MethodBuilder Define (TypeContainer parent)
 			{
 				// Disable reporting, parameters are resolved twice
 				Report.DisableReporting ();
@@ -1555,7 +1475,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					Report.EnableReporting ();
 				}
 
-				base.Define (parent);
+				return base.Define (parent);
 			}
 
 			public override ParametersCompiled ParameterInfo {

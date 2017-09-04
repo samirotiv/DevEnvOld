@@ -16,9 +16,8 @@ fallback token code OP, but the parser needs the actual token code.
 
 """
 
+# Python imports
 import pickle
-import hashlib
-
 
 
 class Grammar(object):
@@ -75,7 +74,7 @@ class Grammar(object):
 
     """
 
-    def __init__(self, bnf_text):
+    def __init__(self):
         self.symbol2number = {}
         self.number2symbol = {}
         self.states = []
@@ -85,7 +84,6 @@ class Grammar(object):
         self.tokens = {}
         self.symbol2label = {}
         self.start = 256
-        self.sha256 = hashlib.sha256(bnf_text.encode("utf-8")).hexdigest()
 
     def dump(self, filename):
         """Dump the grammar tables to a pickle file."""

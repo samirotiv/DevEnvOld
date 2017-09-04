@@ -1,11 +1,29 @@
 //
+// GenericParameter.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
@@ -48,7 +66,10 @@ namespace Mono.Cecil {
 				if (constraints != null)
 					return constraints.Count > 0;
 
-				return HasImage && Module.Read (this, (generic_parameter, reader) => reader.HasGenericConstraints (generic_parameter));
+				if (HasImage)
+					return Module.Read (this, (generic_parameter, reader) => reader.HasGenericConstraints (generic_parameter));
+
+				return false;
 			}
 		}
 
@@ -58,7 +79,7 @@ namespace Mono.Cecil {
 					return constraints;
 
 				if (HasImage)
-					return Module.Read (ref constraints, this, (generic_parameter, reader) => reader.ReadGenericConstraints (generic_parameter));
+					return constraints = Module.Read (this, (generic_parameter, reader) => reader.ReadGenericConstraints (generic_parameter));
 
 				return constraints = new Collection<TypeReference> ();
 			}
@@ -74,7 +95,7 @@ namespace Mono.Cecil {
 		}
 
 		public Collection<CustomAttribute> CustomAttributes {
-			get { return custom_attributes ?? (this.GetCustomAttributes (ref custom_attributes, Module)); }
+			get { return custom_attributes ?? (custom_attributes = this.GetCustomAttributes (Module)); }
 		}
 
 		public override IMetadataScope Scope {
@@ -124,7 +145,7 @@ namespace Mono.Cecil {
 			get { return true; }
 		}
 
-		public override bool ContainsGenericParameter {
+		internal override bool ContainsGenericParameter {
 			get { return true; }
 		}
 
@@ -181,20 +202,18 @@ namespace Mono.Cecil {
 			this.owner = owner;
 			this.type = owner.GenericParameterType;
 			this.etype = ConvertGenericParameterType (this.type);
-			this.token = new MetadataToken (TokenType.GenericParam);
-
 		}
 
-		internal GenericParameter (int position, GenericParameterType type, ModuleDefinition module)
+		public GenericParameter (int position, GenericParameterType type, ModuleDefinition module)
 			: base (string.Empty, string.Empty)
 		{
-			Mixin.CheckModule (module);
+			if (module == null)
+				throw new ArgumentNullException ();
 
 			this.position = position;
 			this.type = type;
 			this.etype = ConvertGenericParameterType (type);
 			this.module = module;
-			this.token = new MetadataToken (TokenType.GenericParam);
 		}
 
 		static ElementType ConvertGenericParameterType (GenericParameterType type)

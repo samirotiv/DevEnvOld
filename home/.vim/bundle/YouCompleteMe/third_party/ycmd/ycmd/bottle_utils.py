@@ -19,11 +19,12 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 from future.utils import PY2
-from ycmd.utils import ToCppStringCompatible, ToUnicode
+from ycmd.utils import ToBytes, ToUnicode
 import bottle
 
 
@@ -38,6 +39,5 @@ import bottle
 # making life easier for codebases that work across versions, thus preventing
 # tracebacks in the depths of WSGI server frameworks.
 def SetResponseHeader( name, value ):
-  name = ToCppStringCompatible( name ) if PY2 else ToUnicode( name )
-  value = ToCppStringCompatible( value ) if PY2 else ToUnicode( value )
-  bottle.response.set_header( name, value )
+  name = ToBytes( name ) if PY2 else ToUnicode( name )
+  bottle.response.set_header( name, ToUnicode( value ) )

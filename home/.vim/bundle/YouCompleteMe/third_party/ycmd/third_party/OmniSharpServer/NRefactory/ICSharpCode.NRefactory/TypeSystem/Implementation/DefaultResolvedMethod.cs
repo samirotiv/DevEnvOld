@@ -236,8 +236,7 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 		
 		public override ISymbolReference ToReference()
 		{
-			var declType = this.DeclaringType;
-			var declTypeRef = declType != null ? declType.ToTypeReference() : SpecialType.UnknownType;
+			var declTypeRef = this.DeclaringType.ToTypeReference();
 			if (IsExplicitInterfaceImplementation && ImplementedInterfaceMembers.Count == 1) {
 				return new ExplicitInterfaceImplementationMemberReference(declTypeRef, ImplementedInterfaceMembers[0].ToReference());
 			} else {
@@ -256,18 +255,14 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 		{
 			if (TypeParameterSubstitution.Identity.Equals(substitution))
 				return this;
-			if (TypeParameters.Count == 0) {
-				if (DeclaringTypeDefinition == null || DeclaringTypeDefinition.TypeParameterCount == 0)
-					return this;
-				if (substitution.MethodTypeArguments != null && substitution.MethodTypeArguments.Count > 0)
-					substitution = new TypeParameterSubstitution(substitution.ClassTypeArguments, EmptyList<IType>.Instance);
-			}
 			return new SpecializedMethod(this, substitution);
 		}
 		
 		IMethod IMethod.Specialize(TypeParameterSubstitution substitution)
 		{
-			return (IMethod)Specialize(substitution);
+			if (TypeParameterSubstitution.Identity.Equals(substitution))
+				return this;
+			return new SpecializedMethod(this, substitution);
 		}
 		
 		public override string ToString()
@@ -275,7 +270,7 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 			StringBuilder b = new StringBuilder("[");
 			b.Append(this.SymbolKind);
 			b.Append(' ');
-			if (this.DeclaringType != null) {
+			if (this.DeclaringType.Kind != TypeKind.Unknown) {
 				b.Append(this.DeclaringType.ReflectionName);
 				b.Append('.');
 			}

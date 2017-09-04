@@ -1,27 +1,6 @@
 .. image:: http://bottlepy.org/docs/dev/_static/logo_nav.png
-  :target: http://bottlepy.org/
   :alt: Bottle Logo
   :align: right
-
-.. image:: https://travis-ci.org/bottlepy/bottle.svg?branch=master
-    :target: https://travis-ci.org/bottlepy/bottle
-    :alt: Bottle Build
-
-.. image:: https://circleci.com/gh/bottlepy/bottle.svg?style=svg
-   :target: https://circleci.com/gh/bottlepy/bottle
-   :alt: CI Bottle
-
-.. image:: https://coveralls.io/repos/github/bottlepy/bottle/badge.svg?branch=master
-   :target: https://coveralls.io/github/bottlepy/bottle?branch=master
-   :alt: Coverage
-
-.. image:: https://img.shields.io/pypi/v/bottle.svg
-    :target: https://pypi.python.org/pypi/bottle/
-    :alt: Latest Version
-
-.. image:: https://img.shields.io/pypi/l/bottle.svg
-    :target: https://pypi.python.org/pypi/bottle/
-    :alt: License
 
 .. _mako: http://www.makotemplates.org/
 .. _cheetah: http://www.cheetahtemplate.org/
@@ -43,7 +22,7 @@ Bottle is a fast, simple and lightweight WSGI_ micro web-framework for Python_. 
 * **Routing:** Requests to function-call mapping with support for clean and  dynamic URLs.
 * **Templates:** Fast and pythonic `*built-in template engine* <http://bottlepy.org/docs/dev/tutorial.html#tutorial-templates>`_ and support for mako_, jinja2_ and cheetah_ templates.
 * **Utilities:** Convenient access to form data, file uploads, cookies, headers and other HTTP-related metadata.
-* **Server:** Built-in HTTP development server and support for paste_, fapws3_, bjoern_, `Google App Engine <https://cloud.google.com/appengine/>`_, cherrypy_ or any other WSGI_ capable HTTP server.
+* **Server:** Built-in HTTP development server and support for paste_, fapws3_, bjoern_, `Google App Engine <http://code.google.com/intl/en-US/appengine/>`_, cherrypy_ or any other WSGI_ capable HTTP server.
 
 Homepage and documentation: http://bottlepy.org
 
@@ -67,15 +46,15 @@ Run this script or paste it into a Python console, then point your browser to `<
 Download and Install
 --------------------
 
-.. __: https://github.com/bottlepy/bottle/raw/master/bottle.py
+.. __: https://github.com/defnull/bottle/raw/master/bottle.py
 
-Install the latest stable release with ``pip install bottle``, ``easy_install -U bottle`` or download `bottle.py`__ (unstable) into your project directory. There are no hard dependencies other than the Python standard library. Bottle runs with **Python 2.7 and 3.3+**.
+Install the latest stable release with ``pip install bottle``, ``easy_install -U bottle`` or download `bottle.py`__ (unstable) into your project directory. There are no hard dependencies other than the Python standard library. Bottle runs with **Python 2.5+ and 3.x**.
 
 
 License
 -------
 
-.. __: https://github.com/bottlepy/bottle/raw/master/LICENSE
+.. __: https://github.com/defnull/bottle/raw/master/LICENSE
 
 Code and documentation are available according to the MIT License (see LICENSE__).
 

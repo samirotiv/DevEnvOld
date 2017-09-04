@@ -779,8 +779,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 				return ((MemberResolveResult)rr).Member;
 			} else if (rr is TypeResolveResult) {
 				return ((TypeResolveResult)rr).Type.GetDefinition();
-			} else if (rr is ConversionResolveResult) {
-				return ((ConversionResolveResult)rr).Input.GetSymbol();
 			}
 			
 			return null;

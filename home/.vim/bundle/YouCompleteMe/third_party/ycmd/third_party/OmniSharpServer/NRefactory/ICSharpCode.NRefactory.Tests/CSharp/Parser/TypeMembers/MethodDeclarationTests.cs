@@ -458,19 +458,5 @@ namespace ICSharpCode.NRefactory.CSharp.Parser.TypeMembers
 						new ParameterDeclaration(new SimpleType("async"), "async")
 					}});
 		}
-		
-		[Test]
-		public void Arglist()
-		{
-			ParseUtilCSharp.AssertTypeMember(
-				"void M(__arglist) {}",
-				new MethodDeclaration {
-					ReturnType = new PrimitiveType("void"),
-					Name = "M",
-					Body = new BlockStatement(),
-					Parameters = {
-						new ParameterDeclaration(new PrimitiveType("__arglist"), "")
-					}});
-		}
 	}
 }

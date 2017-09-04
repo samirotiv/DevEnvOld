@@ -259,20 +259,9 @@ namespace ICSharpCode.NRefactory.CSharp
 			}
 
 			if (expr.Parent is YieldReturnStatement) {
-				ParameterizedType pt = null;
-				var parent = expr.Ancestors.FirstOrDefault(n => n is EntityDeclaration || n is AnonymousMethodExpression|| n is LambdaExpression);
-				if (parent != null) {
-					var rr = resolver.Resolve(parent);
-					if (!rr.IsError)
-						pt = rr.Type as ParameterizedType;
-				}
-				var e = parent as EntityDeclaration;
-				if (e != null) {
-					var rt = resolver.Resolve(e.ReturnType);
-					if (!rt.IsError)
-						pt = rt.Type as ParameterizedType;
-				}
-				if (pt != null) {
+				var state = resolver.GetResolverStateBefore(expr);
+				if (state != null && (state.CurrentMember.ReturnType is ParameterizedType)) {
+					var pt = (ParameterizedType)state.CurrentMember.ReturnType;
 					if (pt.FullName == "System.Collections.Generic.IEnumerable") {
 						return new [] { pt.TypeArguments.First() };
 					}
@@ -313,8 +302,6 @@ namespace ICSharpCode.NRefactory.CSharp
 			var typeInference = new TypeInference(context.Compilation);
 			typeInference.Algorithm = TypeInferenceAlgorithm.Improved;
 			var inferedType = typeInference.FindTypeInBounds(type, emptyTypes);
-			if (inferedType.Kind == TypeKind.ByReference)
-				inferedType = ((ByReferenceType)inferedType).ElementType;
 			if (inferedType.Kind == TypeKind.Unknown)
 				return new PrimitiveType("object");
 			return context.CreateShortType(inferedType);

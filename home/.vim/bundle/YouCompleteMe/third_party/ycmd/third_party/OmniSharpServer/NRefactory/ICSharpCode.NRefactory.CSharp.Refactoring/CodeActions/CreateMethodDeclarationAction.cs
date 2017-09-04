@@ -363,10 +363,7 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 				case "System.Action":
 					return "action";
 			}
-			if (returnType.Kind == TypeKind.Interface && returnType.Name.StartsWith("I", System.StringComparison.Ordinal))
-				return returnType.Name.Substring(1);
-			else
-				return returnType.Name;
+			return returnType.Name;
 		}
 		
 		string GetMethodName(InvocationExpression invocation)

@@ -1,11 +1,29 @@
 //
+// TypeSystem.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
@@ -78,7 +96,7 @@ namespace Mono.Cecil {
 
 		sealed class CommonTypeSystem : TypeSystem {
 
-			AssemblyNameReference core_library;
+			AssemblyNameReference corlib;
 
 			public CommonTypeSystem (ModuleDefinition module)
 				: base (module)
@@ -90,23 +108,30 @@ namespace Mono.Cecil {
 				return CreateTypeReference (@namespace, name);
 			}
 
-			public AssemblyNameReference GetCoreLibraryReference ()
+			public AssemblyNameReference GetCorlibReference ()
 			{
-				if (core_library != null)
-					return core_library;
+				if (corlib != null)
+					return corlib;
 
-				if (module.TryGetCoreLibraryReference (out core_library))
-					return core_library;
+				const string mscorlib = "mscorlib";
 
-				core_library = new AssemblyNameReference {
-					Name = Mixin.mscorlib,
+				var references = module.AssemblyReferences;
+
+				for (int i = 0; i < references.Count; i++) {
+					var reference = references [i];
+					if (reference.Name == mscorlib)
+						return corlib = reference;
+				}
+
+				corlib = new AssemblyNameReference {
+					Name = mscorlib,
 					Version = GetCorlibVersion (),
 					PublicKeyToken = new byte [] { 0xb7, 0x7a, 0x5c, 0x56, 0x19, 0x34, 0xe0, 0x89 },
 				};
 
-				module.AssemblyReferences.Add (core_library);
+				references.Add (corlib);
 
-				return core_library;
+				return corlib;
 			}
 
 			Version GetCorlibVersion ()
@@ -126,7 +151,7 @@ namespace Mono.Cecil {
 
 			TypeReference CreateTypeReference (string @namespace, string name)
 			{
-				return new TypeReference (@namespace, name, module, GetCoreLibraryReference ());
+				return new TypeReference (@namespace, name, module, GetCorlibReference ());
 			}
 		}
 
@@ -158,7 +183,7 @@ namespace Mono.Cecil {
 
 		internal static TypeSystem CreateTypeSystem (ModuleDefinition module)
 		{
-			if (module.IsCoreLibrary ())
+			if (module.IsCorlib ())
 				return new CoreTypeSystem (module);
 
 			return new CommonTypeSystem (module);
@@ -166,160 +191,100 @@ namespace Mono.Cecil {
 
 		internal abstract TypeReference LookupType (string @namespace, string name);
 
-		TypeReference LookupSystemType (ref TypeReference reference, string name, ElementType element_type)
+		TypeReference LookupSystemType (string name, ElementType element_type)
 		{
-			lock (module.SyncRoot) {
-				if (reference != null)
-					return reference;
-				var type = LookupType ("System", name);
-				type.etype = element_type;
-				return reference = type;
-			}
+			var type = LookupType ("System", name);
+			type.etype = element_type;
+			return type;
 		}
 
-		TypeReference LookupSystemValueType (ref TypeReference typeRef, string name, ElementType element_type)
+		TypeReference LookupSystemValueType (string name, ElementType element_type)
 		{
-			lock (module.SyncRoot) {
-				if (typeRef != null)
-					return typeRef;
-				var type = LookupType ("System", name);
-				type.etype = element_type;
-				type.IsValueType = true;
-				return typeRef = type;
-			}
+			var type = LookupSystemType (name, element_type);
+			type.IsValueType = true;
+			return type;
 		}
 
-		[Obsolete ("Use CoreLibrary")]
 		public IMetadataScope Corlib {
-			get { return CoreLibrary; }
-		}
-
-		public IMetadataScope CoreLibrary {
 			get {
 				var common = this as CommonTypeSystem;
 				if (common == null)
 					return module;
 
-				return common.GetCoreLibraryReference ();
+				return common.GetCorlibReference ();
 			}
 		}
 
 		public TypeReference Object {
-			get { return type_object ?? (LookupSystemType (ref type_object, "Object", ElementType.Object)); }
+			get { return type_object ?? (type_object = LookupSystemType ("Object", ElementType.Object)); }
 		}
 
 		public TypeReference Void {
-			get { return type_void ?? (LookupSystemType (ref type_void, "Void", ElementType.Void)); }
+			get { return type_void ?? (type_void = LookupSystemType ("Void", ElementType.Void)); }
 		}
 
 		public TypeReference Boolean {
-			get { return type_bool ?? (LookupSystemValueType (ref type_bool, "Boolean", ElementType.Boolean)); }
+			get { return type_bool ?? (type_bool = LookupSystemValueType ("Boolean", ElementType.Boolean)); }
 		}
 
 		public TypeReference Char {
-			get { return type_char ?? (LookupSystemValueType (ref type_char, "Char", ElementType.Char)); }
+			get { return type_char ?? (type_char = LookupSystemValueType ("Char", ElementType.Char)); }
 		}
 
 		public TypeReference SByte {
-			get { return type_sbyte ?? (LookupSystemValueType (ref type_sbyte, "SByte", ElementType.I1)); }
+			get { return type_sbyte ?? (type_sbyte = LookupSystemValueType ("SByte", ElementType.I1)); }
 		}
 
 		public TypeReference Byte {
-			get { return type_byte ?? (LookupSystemValueType (ref type_byte, "Byte", ElementType.U1)); }
+			get { return type_byte ?? (type_byte = LookupSystemValueType ("Byte", ElementType.U1)); }
 		}
 
 		public TypeReference Int16 {
-			get { return type_int16 ?? (LookupSystemValueType (ref type_int16, "Int16", ElementType.I2)); }
+			get { return type_int16 ?? (type_int16 = LookupSystemValueType ("Int16", ElementType.I2)); }
 		}
 
 		public TypeReference UInt16 {
-			get { return type_uint16 ?? (LookupSystemValueType (ref type_uint16, "UInt16", ElementType.U2)); }
+			get { return type_uint16 ?? (type_uint16 = LookupSystemValueType ("UInt16", ElementType.U2)); }
 		}
 
 		public TypeReference Int32 {
-			get { return type_int32 ?? (LookupSystemValueType (ref type_int32, "Int32", ElementType.I4)); }
+			get { return type_int32 ?? (type_int32 = LookupSystemValueType ("Int32", ElementType.I4)); }
 		}
 
 		public TypeReference UInt32 {
-			get { return type_uint32 ?? (LookupSystemValueType (ref type_uint32, "UInt32", ElementType.U4)); }
+			get { return type_uint32 ?? (type_uint32 = LookupSystemValueType ("UInt32", ElementType.U4)); }
 		}
 
 		public TypeReference Int64 {
-			get { return type_int64 ?? (LookupSystemValueType (ref type_int64, "Int64", ElementType.I8)); }
+			get { return type_int64 ?? (type_int64 = LookupSystemValueType ("Int64", ElementType.I8)); }
 		}
 
 		public TypeReference UInt64 {
-			get { return type_uint64 ?? (LookupSystemValueType (ref type_uint64, "UInt64", ElementType.U8)); }
+			get { return type_uint64 ?? (type_uint64 = LookupSystemValueType ("UInt64", ElementType.U8)); }
 		}
 
 		public TypeReference Single {
-			get { return type_single ?? (LookupSystemValueType (ref type_single, "Single", ElementType.R4)); }
+			get { return type_single ?? (type_single = LookupSystemValueType ("Single", ElementType.R4)); }
 		}
 
 		public TypeReference Double {
-			get { return type_double ?? (LookupSystemValueType (ref type_double, "Double", ElementType.R8)); }
+			get { return type_double ?? (type_double = LookupSystemValueType ("Double", ElementType.R8)); }
 		}
 
 		public TypeReference IntPtr {
-			get { return type_intptr ?? (LookupSystemValueType (ref type_intptr, "IntPtr", ElementType.I)); }
+			get { return type_intptr ?? (type_intptr = LookupSystemValueType ("IntPtr", ElementType.I)); }
 		}
 
 		public TypeReference UIntPtr {
-			get { return type_uintptr ?? (LookupSystemValueType (ref type_uintptr, "UIntPtr", ElementType.U)); }
+			get { return type_uintptr ?? (type_uintptr = LookupSystemValueType ("UIntPtr", ElementType.U)); }
 		}
 
 		public TypeReference String {
-			get { return type_string ?? (LookupSystemType (ref type_string, "String", ElementType.String)); }
+			get { return type_string ?? (type_string = LookupSystemType ("String", ElementType.String)); }
 		}
 
 		public TypeReference TypedReference {
-			get { return type_typedref ?? (LookupSystemValueType (ref type_typedref, "TypedReference", ElementType.TypedByRef)); }
-		}
-	}
-
-	static partial class Mixin {
-
-		public const string mscorlib = "mscorlib";
-		public const string system_runtime = "System.Runtime";
-		public const string system_private_corelib = "System.Private.CoreLib";
-		public const string netstandard = "netstandard";
-
-		public static bool TryGetCoreLibraryReference (this ModuleDefinition module, out AssemblyNameReference reference)
-		{
-			var references = module.AssemblyReferences;
-
-			for (int i = 0; i < references.Count; i++) {
-				reference = references [i];
-				if (IsCoreLibrary (reference))
-					return true;
-			}
-
-			reference = null;
-			return false;
-
-		}
-
-		public static bool IsCoreLibrary (this ModuleDefinition module)
-		{
-			if (module.Assembly == null)
-				return false;
-
-			if (!IsCoreLibrary (module.Assembly.Name))
-				return false;
-
-			if (module.HasImage && module.Read (module, (m, reader) => reader.image.GetTableLength (Table.AssemblyRef) > 0))
-				return false;
-
-			return true;
-		}
-
-		static bool IsCoreLibrary (AssemblyNameReference reference)
-		{
-			var name = reference.Name;
-			return name == mscorlib
-				|| name == system_runtime
-				|| name == system_private_corelib
-				|| name == netstandard;
+			get { return type_typedref ?? (type_typedref = LookupSystemValueType ("TypedReference", ElementType.TypedByRef)); }
 		}
 	}
 }

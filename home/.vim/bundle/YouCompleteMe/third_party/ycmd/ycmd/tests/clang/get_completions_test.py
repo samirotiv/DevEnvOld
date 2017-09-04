@@ -21,7 +21,8 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 import json
@@ -35,7 +36,7 @@ from ycmd.completers.cpp.clang_completer import NO_COMPLETIONS_MESSAGE
 from ycmd.responses import UnknownExtraConf, NoExtraConfDetected
 from ycmd.tests.clang import IsolatedYcmd, PathToTestFile, SharedYcmd
 from ycmd.tests.test_utils import ( BuildRequest, CompletionEntryMatcher,
-                                    ErrorMatcher, ExpectedFailure )
+                                    ErrorMatcher, UserOption, ExpectedFailure )
 from ycmd.utils import ReadFile
 
 NO_COMPLETIONS_ERROR = ErrorMatcher( RuntimeError, NO_COMPLETIONS_MESSAGE )
@@ -275,8 +276,6 @@ def GetCompletions_FilteredNoResults_Fallback_test( app ):
           CompletionEntryMatcher( 'do_', '[ID]' ),
           CompletionEntryMatcher( 'do_something', '[ID]' ),
           CompletionEntryMatcher( 'do_another_thing', '[ID]' ),
-          CompletionEntryMatcher( 'DO_SOMETHING_TO', '[ID]' ),
-          CompletionEntryMatcher( 'DO_SOMETHING_VIA', '[ID]' )
         ),
         'errors': empty()
       } )
@@ -284,7 +283,7 @@ def GetCompletions_FilteredNoResults_Fallback_test( app ):
   } )
 
 
-@IsolatedYcmd()
+@IsolatedYcmd
 def GetCompletions_WorksWithExplicitFlags_test( app ):
   app.post_json(
     '/ignore_extra_conf_file',
@@ -318,12 +317,13 @@ int main()
   eq_( 7, response_data[ 'completion_start_column' ] )
 
 
-@IsolatedYcmd( { 'auto_trigger': 0 } )
+@IsolatedYcmd
 def GetCompletions_NoCompletionsWhenAutoTriggerOff_test( app ):
-  app.post_json(
-    '/ignore_extra_conf_file',
-    { 'filepath': PathToTestFile( '.ycm_extra_conf.py' ) } )
-  contents = """
+  with UserOption( 'auto_trigger', False ):
+    app.post_json(
+      '/ignore_extra_conf_file',
+      { 'filepath': PathToTestFile( '.ycm_extra_conf.py' ) } )
+    contents = """
 struct Foo {
   int x;
   int y;
@@ -337,19 +337,19 @@ int main()
 }
 """
 
-  completion_data = BuildRequest( filepath = '/foo.cpp',
-                                  filetype = 'cpp',
-                                  contents = contents,
-                                  line_num = 11,
-                                  column_num = 7,
-                                  compilation_flags = ['-x', 'c++'] )
+    completion_data = BuildRequest( filepath = '/foo.cpp',
+                                    filetype = 'cpp',
+                                    contents = contents,
+                                    line_num = 11,
+                                    column_num = 7,
+                                    compilation_flags = ['-x', 'c++'] )
 
-  results = app.post_json( '/completions',
-                           completion_data ).json[ 'completions' ]
-  assert_that( results, empty() )
+    results = app.post_json( '/completions',
+                             completion_data ).json[ 'completions' ]
+    assert_that( results, empty() )
 
 
-@IsolatedYcmd()
+@IsolatedYcmd
 def GetCompletions_UnknownExtraConfException_test( app ):
   filepath = PathToTestFile( 'basic.cpp' )
   completion_data = BuildRequest( filepath = filepath,
@@ -383,7 +383,7 @@ def GetCompletions_UnknownExtraConfException_test( app ):
                                      NoExtraConfDetected.__name__ ) ) )
 
 
-@IsolatedYcmd()
+@IsolatedYcmd
 def GetCompletions_WorksWhenExtraConfExplicitlyAllowed_test( app ):
   app.post_json(
     '/load_extra_conf_file',
@@ -508,9 +508,6 @@ def GetCompletions_FilenameCompleter_ClientDataGivenToExtraConf_test( app ):
   )
 
 
-@ExpectedFailure( 'Filtering and sorting does not support candidates with '
-                  'non-ASCII characters.',
-                  contains_string( "value for 'completions' no item matches" ) )
 @SharedYcmd
 def GetCompletions_UnicodeInLine_test( app ):
   RunTest( app, {
@@ -539,8 +536,9 @@ def GetCompletions_UnicodeInLine_test( app ):
   } )
 
 
-@ExpectedFailure( 'Filtering and sorting does not support candidates with '
-                  'non-ASCII characters.',
+@ExpectedFailure( 'Filtering and sorting does not work when the candidate '
+                  'contains non-ASCII characters. This is due to the way '
+                  'the filtering and sorting code works.',
                   contains_string( "value for 'completions' no item matches" ) )
 @SharedYcmd
 def GetCompletions_UnicodeInLineFilter_test( app ):

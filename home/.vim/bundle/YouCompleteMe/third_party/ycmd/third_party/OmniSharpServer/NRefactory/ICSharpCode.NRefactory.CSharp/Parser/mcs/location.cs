@@ -16,7 +16,7 @@ using Mono.CompilerServices.SymbolWriter;
 using System.Diagnostics;
 using System.Linq;
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	//
 	//  This is one single source file.

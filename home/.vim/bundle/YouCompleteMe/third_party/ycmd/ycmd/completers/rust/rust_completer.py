@@ -19,15 +19,17 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
+from future.utils import native, iteritems
+from future import standard_library
+standard_library.install_aliases()
 
-from ycmd.utils import ToBytes, SetEnviron, ProcessIsRunning, urljoin
+from ycmd.utils import ToBytes, SetEnviron, ProcessIsRunning
 from ycmd.completers.completer import Completer
 from ycmd import responses, utils, hmac_utils
 
-from future.utils import iteritems, native
 import logging
+import urllib.parse
 import requests
 import json
 import tempfile
@@ -128,11 +130,17 @@ class RustCompleter( Completer ):
     Attempt to read user option for rust_src_path. Fallback to environment
     variable if it's not provided.
     """
-    rust_src_path = ( self.user_options[ 'rust_src_path' ] or
-                      os.environ.get( 'RUST_SRC_PATH' ) )
+    rust_src_path = self.user_options[ 'rust_src_path' ]
 
+    # Early return if user provided config
     if rust_src_path:
-      return os.path.expanduser( os.path.expandvars( rust_src_path ) )
+      return rust_src_path
+
+    # Fall back to environment variable
+    env_key = 'RUST_SRC_PATH'
+    if env_key in os.environ:
+      return os.environ[ env_key ]
+
     return None
 
 
@@ -152,7 +160,7 @@ class RustCompleter( Completer ):
     _logger.info( 'RustCompleter._GetResponse' )
     handler = ToBytes( handler )
     method = ToBytes( method )
-    url = urljoin( ToBytes( self._racerd_host ), handler )
+    url = urllib.parse.urljoin( ToBytes( self._racerd_host ), handler )
     parameters = self._ConvertToRacerdRequest( request_data )
     body = ToBytes( json.dumps( parameters ) ) if parameters else bytes()
     extra_headers = self._ExtraHeaders( method, handler, body )

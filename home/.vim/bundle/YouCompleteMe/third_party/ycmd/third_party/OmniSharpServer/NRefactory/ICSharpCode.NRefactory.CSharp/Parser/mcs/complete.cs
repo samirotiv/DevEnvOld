@@ -17,7 +17,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	//
 	// A common base class for Completing expressions, it
@@ -142,7 +142,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			}
 
 			if (targs != null) {
-				if (!targs.Resolve (rc, true))
+				if (!targs.Resolve (rc))
 					return null;
 			}
 
@@ -208,18 +208,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		protected override void CloneTo (CloneContext clonectx, Expression t)
 		{
 			// Nothing
-		}
-	}
-
-	public class EmptyCompletion : CompletingExpression
-	{
-		protected override void CloneTo (CloneContext clonectx, Expression target)
-		{
-		}
-
-		protected override Expression DoResolve (ResolveContext rc)
-		{
-			throw new CompletionResult ("", new string [0]);
 		}
 	}
 	

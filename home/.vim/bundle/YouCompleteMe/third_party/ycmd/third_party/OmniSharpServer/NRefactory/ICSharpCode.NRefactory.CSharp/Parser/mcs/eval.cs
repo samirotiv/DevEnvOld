@@ -21,13 +21,8 @@ using System.IO;
 using System.Text;
 using System.Linq;
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
-
-	/// <summary>
-	/// Experimental!
-	/// </summary>
-	public delegate void ValueModificationHandler (string variableName, int row, int column, object value);
 
 	/// <summary>
 	///   Evaluator: provides an API to evaluate C# statements and
@@ -76,8 +71,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		readonly ModuleContainer module;
 		readonly ReflectionImporter importer;
 		readonly CompilationSourceFile source_file;
-
-		int? listener_id;
 		
 		public Evaluator (CompilerContext ctx)
 		{
@@ -159,7 +152,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		///
 		///   This is the base class that will host the code
 		///   executed by the Evaluator.  By default
-		///   this is the ICSharpCode.NRefactory.MonoCSharp.InteractiveBase class
+		///   this is the Mono.CSharp.InteractiveBase class
 		///   which is useful for interactive use.
 		///
 		///   By changing this property you can control the
@@ -295,30 +288,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			return compiled;
 		}
 
-		static MethodInfo listener_proxy_value;
-		internal void EmitValueChangedCallback (EmitContext ec, string name, TypeSpec type, Location loc)
-		{
-			if (listener_id == null)
-				listener_id = ListenerProxy.Register (ModificationListener);
-
-			if (listener_proxy_value == null)
-				listener_proxy_value = typeof (ListenerProxy).GetMethod ("ValueChanged");
-
-#if STATIC
-			throw new NotSupportedException ();
-#else
-			// object value, int row, int col, string name, int listenerId
-			if (type.IsStructOrEnum)
-				ec.Emit (OpCodes.Box, type);
-
-			ec.EmitInt (loc.Row);
-			ec.EmitInt (loc.Column);
-			ec.Emit (OpCodes.Ldstr, name);
-			ec.EmitInt (listener_id.Value);
-			ec.Emit (OpCodes.Call, listener_proxy_value);
-#endif
-		}
-
 		/// <summary>
 		///   Evaluates and expression or statement and returns any result values.
 		/// </summary>
@@ -369,11 +338,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				Console.WriteLine ("Interrupted!\n{0}", e);
 			} finally {
 				invoking = false;
-
-				if (listener_id != null) {
-					ListenerProxy.Unregister (listener_id.Value);
-					listener_id = null;
-				}
 			}
 
 			//
@@ -480,11 +444,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 			return result;
 		}
-
-		/// <summary>
-		/// Experimental!
-		/// </summary>
-		public ValueModificationHandler ModificationListener { get; set; }
 
 		enum InputKind {
 			EOF,
@@ -775,7 +734,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			}
 			
 			module.EmitContainer ();
-
 			if (Report.Errors != 0){
 				if (undo != null)
 					undo.ExecuteUndo ();
@@ -860,19 +818,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		public string GetUsing ()
 		{
-			if (source_file == null || source_file.Usings == null)
-				return string.Empty;
-
 			StringBuilder sb = new StringBuilder ();
 			// TODO:
 			//foreach (object x in ns.using_alias_list)
 			//    sb.AppendFormat ("using {0};\n", x);
 
 			foreach (var ue in source_file.Usings) {
-				if (ue.Alias != null || ue.ResolvedExpression == null)
-					continue;
-
-				sb.AppendFormat("using {0};", ue.ToString ());
+				sb.AppendFormat ("using {0};", ue.ToString ());
 				sb.Append (Environment.NewLine);
 			}
 
@@ -883,11 +835,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		{
 			var res = new List<string> ();
 
-			if (source_file == null || source_file.Usings == null)
-				return res;
-
-			foreach (var ue in source_file.Usings)
-			{
+			foreach (var ue in source_file.Usings) {
 				if (ue.Alias != null || ue.ResolvedExpression == null)
 					continue;
 
@@ -1282,13 +1230,10 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			if (undo_actions == null)
 				undo_actions = new List<Action> ();
 
-			if (current_container.Containers != null)
-			{
-				var existing = current_container.Containers.FirstOrDefault (l => l.MemberName.Basename == tc.MemberName.Basename);
-				if (existing != null) {
-					current_container.RemoveContainer (existing);
-					undo_actions.Add (() => current_container.AddTypeContainer (existing));
-				}
+			var existing = current_container.Containers.FirstOrDefault (l => l.Basename == tc.Basename);
+			if (existing != null) {
+				current_container.RemoveContainer (existing);
+				undo_actions.Add (() => current_container.AddTypeContainer (existing));
 			}
 
 			undo_actions.Add (() => current_container.RemoveContainer (tc));
@@ -1306,38 +1251,5 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			undo_actions = null;
 		}
 	}
-
-	static class ListenerProxy
-	{
-		static readonly Dictionary<int, ValueModificationHandler> listeners = new Dictionary<int, ValueModificationHandler> ();
-
-		static int counter;
-
-		public static int Register (ValueModificationHandler listener)
-		{
-			lock (listeners) {
-				var id = counter++;
-				listeners.Add (id, listener);
-				return id;
-			}
-		}
-
-		public static void Unregister (int listenerId)
-		{
-			lock (listeners) {
-				listeners.Remove (listenerId);
-			}
-		}
-
-		public static void ValueChanged (object value, int row, int col, string name, int listenerId)
-		{
-			ValueModificationHandler action;
-			lock (listeners) {
-				if (!listeners.TryGetValue (listenerId, out action))
-					return;
-			}
-
-			action (name, row, col, value);
-		}
-	}
+	
 }

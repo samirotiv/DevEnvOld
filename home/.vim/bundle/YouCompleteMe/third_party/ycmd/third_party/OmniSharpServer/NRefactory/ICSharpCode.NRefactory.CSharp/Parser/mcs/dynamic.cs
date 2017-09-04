@@ -17,7 +17,7 @@ using SLE = System.Linq.Expressions;
 using System.Dynamic;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	//
 	// A copy of Microsoft.CSharp/Microsoft.CSharp.RuntimeBinder/CSharpBinderFlags.cs
@@ -48,7 +48,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			this.loc = loc;
 		}
 
-		public override TypeSpec ResolveAsType (IMemberContext ec, bool allowUnboundTypeArguments)
+		public override TypeSpec ResolveAsType (IMemberContext ec)
 		{
 			eclass = ExprClass.Type;
 			type = ec.Module.Compiler.BuiltinTypes.Dynamic;
@@ -289,13 +289,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		protected bool DoResolveCore (ResolveContext rc)
 		{
-			foreach (var arg in arguments) {
-				if (arg.Type == InternalType.VarOutType) {
-					// Should be special error message about dynamic dispatch
-					rc.Report.Error (8047, arg.Expr.Location, "Declaration expression cannot be used in this context");
-				}
-			}
-
 			if (rc.CurrentTypeParameters != null && rc.CurrentTypeParameters[0].IsMethodTypeParameter)
 				context_mvars = rc.CurrentTypeParameters;
 
@@ -541,7 +534,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 					}
 				}
 
-				Expression target = new DelegateInvocation (new MemberAccess (site_field_expr, "Target", loc).Resolve (bc), args, false, loc).Resolve (bc);
+				Expression target = new DelegateInvocation (new MemberAccess (site_field_expr, "Target", loc).Resolve (bc), args, loc).Resolve (bc);
 				if (target != null)
 					target.Emit (ec);
 			}
@@ -787,7 +780,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 			if (member != null && member.HasTypeArguments) {
 				TypeArguments ta = member.TypeArguments;
-				if (ta.Resolve (ec, false)) {
+				if (ta.Resolve (ec)) {
 					var targs = new ArrayInitializer (ta.Count, loc);
 					foreach (TypeSpec t in ta.Arguments)
 						targs.Add (new TypeOf (t, loc));

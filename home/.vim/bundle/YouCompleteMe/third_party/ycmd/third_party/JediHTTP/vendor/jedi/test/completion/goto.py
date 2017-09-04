@@ -22,10 +22,10 @@ cd = e
 
 #! ['module math']
 import math
-#! ['module math']
+#! ['import math']
 math
 
-#! ['module math']
+#! ['import math']
 b = math
 #! ['b = math']
 b
@@ -44,7 +44,7 @@ class C(object):
         self.b
         #! 14 ['def b']
         self.b()
-        #! 11 ['param self']
+        #! 11 ['self']
         self.b
         return 1
 
@@ -99,7 +99,7 @@ ClassVar().x = ''
 
 # Recurring use of the same var name, github #315
 def f(t=None):
-    #! 9 ['param t=None']
+    #! 9 ['t=None']
     t = t or 1
 
 
@@ -148,7 +148,7 @@ mod1.a
 #! ['a = 1.0']
 from import_tree.pkg.mod1 import a
 
-#! ['module os']
+#! ['import os']
 from .imports import os
 
 #! ['some_variable = 1']
@@ -180,11 +180,11 @@ class ClassDef():
 # -----------------
 
 param = ClassDef
-#! 8 ['param param']
+#! 8 ['param']
 def ab1(param): pass
-#! 9 ['param param']
+#! 9 ['param']
 def ab2(param): pass
-#! 11 ['param a=param']
+#! 11 ['param = ClassDef']
 def ab3(a=param): pass
 
 ab1(ClassDef);ab2(ClassDef);ab3(ClassDef)
@@ -211,7 +211,7 @@ for i in []:
 def dec(dec_param=3):
     pass
 
-#! 8 ['param dec_param=3']
+#! 8 ['dec_param=3']
 @dec(dec_param=5)
 def y():
     pass

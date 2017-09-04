@@ -17,10 +17,8 @@
 .. _apache: http://httpd.apache.org/
 .. _mod_wsgi: http://code.google.com/p/modwsgi/
 .. _pound: http://www.apsis.ch/pound
-.. _nginx: http://nginx.org/
-.. _lighttpd: http://www.lighttpd.net/
-.. _cherokee: http://cherokee-project.com/
-.. _uWSGI: https://uwsgi-docs.readthedocs.io/en/latest/
+
+
 
 .. _tutorial-deployment:
 
@@ -30,23 +28,22 @@ Deployment
 
 The bottle :func:`run` function, when called without any parameters, starts a local development server on port 8080. You can access and test your application via http://localhost:8080/ if you are on the same host.
 
-To get your application available to the outside world, specify the IP the server should listen to (e.g. ``run(host='192.168.0.1')``) or let the server listen to all interfaces at once (e.g. ``run(host='0.0.0.0')``). The listening port can be changed in a similar way, but you need root or admin rights to choose a port below 1024. Port 80 is the standard for HTTP servers::
+To get your application available to the outside world, specify the IP of the interface the server should listen to (e.g. ``run(host='192.168.0.1')``) or let the server listen to all interfaces at once (e.g. ``run(host='0.0.0.0')``). The listening port can be changed in a similar way, but you need root or admin rights to choose a port below 1024. Port 80 is the standard for HTTP servers::
 
-  # Listen to HTTP requests on all interfaces
-  run(host='0.0.0.0', port=80)
+  run(host='0.0.0.0', port=80) # Listen to HTTP requests on all interfaces
 
 Server Options
 ================================================================================
 
-The built-in default server is based on `wsgiref WSGIServer <http://docs.python.org/library/wsgiref.html#module-wsgiref.simple_server>`_. This non-threading HTTP server is perfectly fine for development, but may become a performance bottleneck when server load increases. There are three ways to eliminate this bottleneck:
+The built-in default server is based on `wsgiref WSGIServer <http://docs.python.org/library/wsgiref.html#module-wsgiref.simple_server>`_. This non-threading HTTP server is perfectly fine for development and early production, but may become a performance bottleneck when server load increases. There are three ways to eliminate this bottleneck:
 
-* Use a different server that is either multi-threaded or supports asynchronous IO.
+* Use a different server that is either multi-threaded or asynchronous.
 * Start multiple server processes and spread the load with a load-balancer.
 * Do both.
 
 **Multi-threaded** servers are the 'classic' way to do it. They are very robust, reasonably fast and easy to manage. As a drawback, they can only handle a limited number of connections at the same time and utilize only one CPU core due to the "Global Interpreter Lock" (GIL) of the Python runtime. This does not hurt most applications, they are waiting for network IO most of the time anyway, but may slow down CPU intensive tasks (e.g. image processing).
 
-**Asynchronous IO** servers are very fast, can handle a virtually unlimited number of concurrent connections and are easy to manage. To take full advantage of their potential, you need to design your application accordingly and understand the concepts of the specific server.
+**Asynchronous** servers are very fast, can handle a virtually unlimited number of concurrent connections and are easy to manage. To take full advantage of their potential, you need to design your application accordingly and understand the concepts of the specific server.
 
 **Multi-processing** (forking) servers are not limited by the GIL and utilize more than one CPU core, but make communication between server instances more expensive. You need a database or external message query to share state between processes, or design your application so that it does not need any shared state. The setup is also a bit more complicated, but there are good tutorials available. 
 
@@ -55,7 +52,7 @@ Switching the Server Backend
 
 The easiest way to increase performance is to install a multi-threaded server library like paste_ or cherrypy_ and tell Bottle to use that instead of the single-threaded default server::
 
-    run(server='paste')
+    bottle.run(server='paste')
 
 Bottle ships with a lot of ready-to-use adapters for the most common WSGI servers and automates the setup process. Here is an incomplete list:
 
@@ -91,6 +88,7 @@ If there is no adapter for your favorite server or if you need more control over
     httpserver.serve(application, host='0.0.0.0', port=80)
 
 
+
 Apache mod_wsgi
 --------------------------------------------------------------------------------
 
@@ -100,7 +98,6 @@ All you need is an ``app.wsgi`` file that provides an ``application`` object. Th
 
 File ``/var/www/yourapp/app.wsgi``::
 
-    import os
     # Change working directory so relative paths (and template lookup) work again
     os.chdir(os.path.dirname(__file__))
     
@@ -120,16 +117,11 @@ The Apache configuration may look like this::
         <Directory /var/www/yourapp>
             WSGIProcessGroup yourapp
             WSGIApplicationGroup %{GLOBAL}
-            Require all granted
+            Order deny,allow
+            Allow from all
         </Directory>
     </VirtualHost>
 
-
-
-uWSGI
---------------------------------------------------------------------------------
-
-uWSGI_ is a modern alternative to FastCGI and the recommended deployment option on servers like nginx_, lighttpd_, and cherokee_. The uWSGI project provides an application server that runs your application, and defines a protocol that frontend webservers can speak to. Have a look at the excellent `Quickstart for Python/WSGI applications <https://uwsgi-docs.readthedocs.io/en/latest/WSGIquickstart.html>`_.
 
 
 Google AppEngine
@@ -158,12 +150,15 @@ Then you can configure App Engine's ``app.yaml`` to use the ``app`` object like 
     - url: /.*
       script: myapp.app
 
+Bottle also provides a ``gae`` server adapter for legacy App Engine applications using the Python 2.5 runtime environment. It works similar to the ``cgi`` adapter in that it does not start a new HTTP server, but prepares and optimizes your application for Google App Engine and makes sure it conforms to their API::
+
+    bottle.run(server='gae') # No need for a host or port setting.
 
 It is always a good idea to let GAE serve static files directly. Here is example for a working  ``app.yaml`` (using the legacy Python 2.5 runtime environment)::
 
     application: myapp
     version: 1
-    runtime: python27
+    runtime: python
     api_version: 1
 
     handlers:
@@ -172,7 +167,6 @@ It is always a good idea to let GAE serve static files directly. Here is example
 
     - url: /.*
       script: myapp.py
-
 
 
 Load Balancer (Manual Setup)

@@ -132,7 +132,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 		
 		/// <summary>
 		/// Gets/Sets the declaring type (incl. type arguments, if any).
-		/// This property will return null for top-level types.
+		/// This property never returns null -- for top-level entities, it returns SharedTypes.UnknownType.
 		/// </summary>
 		new IType DeclaringType { get; } // solves ambiguity between IType.DeclaringType and IEntity.DeclaringType
 		

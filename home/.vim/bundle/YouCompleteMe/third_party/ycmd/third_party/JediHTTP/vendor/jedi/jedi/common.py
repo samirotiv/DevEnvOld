@@ -3,6 +3,7 @@ import sys
 import contextlib
 import functools
 import re
+from itertools import chain
 from ast import literal_eval
 
 from jedi._compatibility import unicode, reraise
@@ -147,48 +148,19 @@ def source_to_unicode(source, encoding=None):
     return unicode(source, encoding, 'replace')
 
 
-def splitlines(string, keepends=False):
+def splitlines(string):
     """
     A splitlines for Python code. In contrast to Python's ``str.splitlines``,
     looks at form feeds and other special characters as normal text. Just
     splits ``\n`` and ``\r\n``.
     Also different: Returns ``['']`` for an empty string input.
-
-    In Python 2.7 form feeds are used as normal characters when using
-    str.splitlines. However in Python 3 somewhere there was a decision to split
-    also on form feeds.
     """
-    if keepends:
-        lst = string.splitlines(True)
-
-        # We have to merge lines that were broken by form feed characters.
-        merge = []
-        for i, line in enumerate(lst):
-            if line.endswith('\f'):
-                merge.append(i)
-
-        for index in reversed(merge):
-            try:
-                lst[index] = lst[index] + lst[index + 1]
-                del lst[index + 1]
-            except IndexError:
-                # index + 1 can be empty and therefore there's no need to
-                # merge.
-                pass
-
-        # The stdlib's implementation of the end is inconsistent when calling
-        # it with/without keepends. One time there's an empty string in the
-        # end, one time there's none.
-        if string.endswith('\n') or string == '':
-            lst.append('')
-        return lst
-    else:
-        return re.split('\n|\r\n', string)
+    return re.split('\n|\r\n', string)
 
 
 def unite(iterable):
     """Turns a two dimensional array into a one dimensional."""
-    return set(typ for types in iterable for typ in types)
+    return set(chain.from_iterable(iterable))
 
 
 def to_list(func):

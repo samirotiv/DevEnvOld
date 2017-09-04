@@ -14,7 +14,6 @@
 
 import socket
 import sys
-import threading
 import time
 
 from waitress.buffers import ReadOnlyFileBasedBuffer
@@ -23,6 +22,7 @@ from waitress.compat import (
     tobytes,
     Queue,
     Empty,
+    thread,
     reraise,
 )
 
@@ -54,17 +54,13 @@ class ThreadedTaskDispatcher(object):
     """A Task Dispatcher that creates a thread for each task.
     """
     stop_count = 0 # Number of threads that will stop soon.
+    start_new_thread = thread.start_new_thread
     logger = logger
 
     def __init__(self):
         self.threads = {} # { thread number -> 1 }
         self.queue = Queue()
-        self.thread_mgmt_lock = threading.Lock()
-
-    def start_new_thread(self, target, args):
-        t = threading.Thread(target=target, name='waitress', args=args)
-        t.daemon = True
-        t.start()
+        self.thread_mgmt_lock = thread.allocate_lock()
 
     def handler_thread(self, thread_no):
         threads = self.threads
@@ -82,12 +78,18 @@ class ThreadedTaskDispatcher(object):
                     if isinstance(e, JustTesting):
                         break
         finally:
-            with self.thread_mgmt_lock:
+            mlock = self.thread_mgmt_lock
+            mlock.acquire()
+            try:
                 self.stop_count -= 1
                 threads.pop(thread_no, None)
+            finally:
+                mlock.release()
 
     def set_thread_count(self, count):
-        with self.thread_mgmt_lock:
+        mlock = self.thread_mgmt_lock
+        mlock.acquire()
+        try:
             threads = self.threads
             thread_no = 0
             running = len(threads) - self.stop_count
@@ -106,6 +108,8 @@ class ThreadedTaskDispatcher(object):
                 for n in range(to_stop):
                     self.queue.put(None)
                     running -= 1
+        finally:
+            mlock.release()
 
     def add_task(self, task):
         try:
@@ -342,7 +346,7 @@ class WSGITask(Task):
                                      "without providing exc_info.")
             if exc_info:
                 try:
-                    if self.wrote_header:
+                    if self.complete:
                         # higher levels will catch and handle raised exception:
                         # 1. "service" method in task.py
                         # 2. "service" method in channel.py
@@ -358,9 +362,6 @@ class WSGITask(Task):
 
             if not status.__class__ is str:
                 raise AssertionError('status %s is not a string' % status)
-            if '\n' in status or '\r' in status:
-                raise ValueError("carriage return/line "
-                                 "feed character present in status")
 
             self.status = status
 
@@ -374,14 +375,6 @@ class WSGITask(Task):
                     raise AssertionError(
                         'Header value %r is not a string in %r' % (v, (k, v))
                     )
-
-                if '\n' in v or '\r' in v:
-                    raise ValueError("carriage return/line "
-                                     "feed character present in header value")
-                if '\n' in k or '\r' in k:
-                    raise ValueError("carriage return/line "
-                                     "feed character present in header name")
-
                 kl = k.lower()
                 if kl == 'content-length':
                     self.content_length = int(v)

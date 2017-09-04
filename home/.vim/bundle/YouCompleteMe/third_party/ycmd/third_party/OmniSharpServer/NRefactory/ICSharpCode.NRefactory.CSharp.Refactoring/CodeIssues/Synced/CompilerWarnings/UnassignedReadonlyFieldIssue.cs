@@ -92,8 +92,6 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 
 			public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
 			{
-				if (typeDeclaration.HasModifier(Modifiers.Partial))
-					return;
 				var list = new List<Tuple<VariableInitializer, IVariable>>();
 				fieldStack.Push(list);
 				foreach (var fieldDeclaration in ConvertToConstantIssue.CollectFields(this, typeDeclaration)) {

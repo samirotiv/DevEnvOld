@@ -1,8 +1,21 @@
+======================
+Requirements and Setup
+======================
+
+You need python-sphinx (pip install sphinx) and gettext (for msgmerge and msgfmt).
+A translation file editor (e.g. poedit) helps a lot.
+
 Translation Workflow
 ====================
 
-If documentation changed, run `make push` to push new messages to transiflex (manager account required).
+Run docs/_locale/update.sh before and after editing *.po files to merge new
+sentences and check for errors.
 
-To update the local translation files, call `make pull` and commit the changes from time to time  (manager account required).
+Do not add *.mo files to the repository, even if your editor creates them.
+We only need the *.po files.
 
-Go to https://www.transifex.com/bottle for actually translating stuff. You can du that with a normal user account at transiflex.
+Add a new language
+==================
+
+Add your language (two-letter code) to 'update.sh' and run it. A new
+two-letter directory will appear with all the *.po files in it.

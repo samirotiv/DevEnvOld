@@ -25,6 +25,7 @@
 #include "Documentation.h"
 
 #include <clang-c/Index.h>
+#include <boost/utility.hpp>
 
 #include <mutex>
 #include <string>
@@ -34,15 +35,13 @@ namespace YouCompleteMe {
 
 struct CompletionData;
 
-class TranslationUnit {
+class TranslationUnit : boost::noncopyable {
 public:
 
   // This constructor creates an invalid, sentinel TU. All of it's methods
   // return empty vectors, and IsCurrentlyUpdating always returns true so that
   // no callers try to rely on the invalid TU.
-  YCM_DLL_EXPORT TranslationUnit();
-  TranslationUnit( const TranslationUnit& ) = delete;
-  TranslationUnit& operator=( const TranslationUnit& ) = delete;
+  TranslationUnit();
 
   YCM_DLL_EXPORT TranslationUnit(
     const std::string &filename,
@@ -54,12 +53,12 @@ public:
 
   void Destroy();
 
-  YCM_DLL_EXPORT bool IsCurrentlyUpdating() const;
+  bool IsCurrentlyUpdating() const;
 
   std::vector< Diagnostic > Reparse(
     const std::vector< UnsavedFile > &unsaved_files );
 
-  YCM_DLL_EXPORT std::vector< CompletionData > CandidatesForLocation(
+  std::vector< CompletionData > CandidatesForLocation(
     int line,
     int column,
     const std::vector< UnsavedFile > &unsaved_files );
@@ -76,13 +75,13 @@ public:
     const std::vector< UnsavedFile > &unsaved_files,
     bool reparse = true );
 
-  YCM_DLL_EXPORT std::string GetTypeAtLocation(
+  std::string GetTypeAtLocation(
     int line,
     int column,
     const std::vector< UnsavedFile > &unsaved_files,
     bool reparse = true );
 
-  YCM_DLL_EXPORT std::string GetEnclosingFunctionAtLocation(
+  std::string GetEnclosingFunctionAtLocation(
     int line,
     int column,
     const std::vector< UnsavedFile > &unsaved_files,
@@ -94,7 +93,7 @@ public:
     const std::vector< UnsavedFile > &unsaved_files,
     bool reparse = true );
 
-  YCM_DLL_EXPORT DocumentationData GetDocsForLocationInFile(
+  DocumentationData GetDocsForLocationInFile(
     int line,
     int column,
     const std::vector< UnsavedFile > &unsaved_files,
@@ -104,7 +103,7 @@ private:
   void Reparse( std::vector< CXUnsavedFile > &unsaved_files );
 
   void Reparse( std::vector< CXUnsavedFile > &unsaved_files,
-                size_t parse_options );
+                uint parse_options );
 
   void UpdateLatestDiagnostics();
 

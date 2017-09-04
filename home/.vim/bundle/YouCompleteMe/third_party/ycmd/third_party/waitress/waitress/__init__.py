@@ -10,7 +10,8 @@ def serve(app, **kw):
         logging.basicConfig()
     server = _server(app, **kw)
     if not _quiet: # pragma: no cover
-        server.print_listen('Serving on http://{}:{}')
+        print('serving on http://%s:%s' % (server.effective_host,
+                                           server.effective_port))
     if _profile: # pragma: no cover
         profile('server.run()', globals(), locals(), (), False)
     else:

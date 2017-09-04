@@ -6,8 +6,7 @@ func s:test_expand_dllpath(optname)
     execute 'call assert_equal("' . $TEST_EXPAND_DLLPATH . '", &' . a:optname . ')' 
 
     execute 'set ' . a:optname . '=~' . $TEST_EXPAND_DLLPATH
-    let home = substitute($HOME, '\\', '/', 'g')
-    execute 'call assert_equal("' . home . $TEST_EXPAND_DLLPATH . '", &' . a:optname . ')' 
+    execute 'call assert_equal("' . $HOME . $TEST_EXPAND_DLLPATH . '", &' . a:optname . ')' 
   finally
     execute 'let &' . a:optname . ' = dllpath_save'
     let $TEST_EXPAND_DLLPATH = ''

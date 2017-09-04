@@ -11,8 +11,8 @@
 .. _cherrypy: http://www.cherrypy.org/
 .. _WSGI: http://www.wsgi.org/
 .. _Python: http://python.org/
-.. _testing: https://github.com/bottlepy/bottle/raw/master/bottle.py
-.. _issue_tracker: https://github.com/bottlepy/bottle/issues
+.. _testing: https://github.com/defnull/bottle/raw/master/bottle.py
+.. _issue_tracker: https://github.com/defnull/bottle/issues
 .. _PyPI: http://pypi.python.org/pypi/bottle
 .. _gae: https://developers.google.com/appengine/
 
@@ -44,13 +44,9 @@ Run this script or paste it into a Python console, then point your browser to `<
 
 .. rubric:: Download and Install
 
-.. __: https://github.com/bottlepy/bottle/raw/master/bottle.py
+.. __: https://github.com/defnull/bottle/raw/master/bottle.py
 
-Install the latest stable release with ``pip install bottle`` or download `bottle.py`__ (unstable) into your project directory. There are no hard [1]_ dependencies other than the Python standard library. Bottle supports **Python 2.7 and Python 3**.
-
-.. deprecated:: 0.13
-    Support for Python 2.5 and 2.6 was dropped with this release.
-
+Install the latest stable release with ``pip install bottle``, ``easy_install -U bottle`` or download `bottle.py`__ (unstable) into your project directory. There are no hard [1]_ dependencies other than the Python standard library. Bottle runs with **Python 2.5+ and 3.x**.
 
 User's Guide
 ===============
@@ -114,5 +110,5 @@ the unmodified library. In all other cases please ask first.
 
 .. rubric:: Footnotes
 
-.. [1] Usage of the template or server adapter classes requires the corresponding template or server modules.
+.. [1] Usage of the template or server adapter classes of course requires the corresponding template or server modules.
 

@@ -356,37 +356,22 @@ class TestWSGITask(unittest.TestCase):
     def test_execute_app_calls_start_response_w_exc_info_complete(self):
         def app(environ, start_response):
             start_response('200 OK', [], [ValueError, ValueError(), None])
-            return [b'a']
         inst = self._makeOne()
         inst.complete = True
         inst.channel.server.application = app
-        inst.execute()
-        self.assertTrue(inst.complete)
-        self.assertEqual(inst.status, '200 OK')
-        self.assertTrue(inst.channel.written)
+        self.assertRaises(ValueError, inst.execute)
 
-    def test_execute_app_calls_start_response_w_excinf_headers_unwritten(self):
+    def test_execute_app_calls_start_response_w_exc_info_incomplete(self):
         def app(environ, start_response):
             start_response('200 OK', [], [ValueError, None, None])
             return [b'a']
         inst = self._makeOne()
-        inst.wrote_header = False
+        inst.complete = False
         inst.channel.server.application = app
-        inst.response_headers = [('a', 'b')]
         inst.execute()
         self.assertTrue(inst.complete)
         self.assertEqual(inst.status, '200 OK')
         self.assertTrue(inst.channel.written)
-        self.assertFalse(('a','b') in inst.response_headers)
-
-    def test_execute_app_calls_start_response_w_excinf_headers_written(self):
-        def app(environ, start_response):
-            start_response('200 OK', [], [ValueError, ValueError(), None])
-        inst = self._makeOne()
-        inst.complete = True
-        inst.wrote_header = True
-        inst.channel.server.application = app
-        self.assertRaises(ValueError, inst.execute)
 
     def test_execute_bad_header_key(self):
         def app(environ, start_response):
@@ -408,27 +393,6 @@ class TestWSGITask(unittest.TestCase):
         inst = self._makeOne()
         inst.channel.server.application = app
         self.assertRaises(AssertionError, inst.execute)
-
-    def test_execute_bad_header_value_control_characters(self):
-        def app(environ, start_response):
-            start_response('200 OK', [('a', '\n')])
-        inst = self._makeOne()
-        inst.channel.server.application = app
-        self.assertRaises(ValueError, inst.execute)
-
-    def test_execute_bad_header_name_control_characters(self):
-        def app(environ, start_response):
-            start_response('200 OK', [('a\r', 'value')])
-        inst = self._makeOne()
-        inst.channel.server.application = app
-        self.assertRaises(ValueError, inst.execute)
-
-    def test_execute_bad_status_control_characters(self):
-        def app(environ, start_response):
-            start_response('200 OK\r', [])
-        inst = self._makeOne()
-        inst.channel.server.application = app
-        self.assertRaises(ValueError, inst.execute)
 
     def test_preserve_header_value_order(self):
         def app(environ, start_response):

@@ -137,7 +137,7 @@ func server_auto_complete(file []byte, filename string, cursor int, context_pack
 		if err := recover(); err != nil {
 			print_backtrace(err)
 			c = []candidate{
-				{"PANIC", "PANIC", decl_invalid, "panic"},
+				{"PANIC", "PANIC", decl_invalid},
 			}
 
 			// drop cache
@@ -186,18 +186,12 @@ func server_auto_complete(file []byte, filename string, cursor int, context_pack
 		var buf bytes.Buffer
 		log.Printf("Got autocompletion request for '%s'\n", filename)
 		log.Printf("Cursor at: %d\n", cursor)
-		if cursor > len(file) || cursor < 0 {
-			log.Println("ERROR! Cursor is outside of the boundaries of the buffer, " +
-				"this is most likely a text editor plugin bug. Text editor is responsible " +
-				"for passing the correct cursor position to gocode.")
-		} else {
-			buf.WriteString("-------------------------------------------------------\n")
-			buf.Write(file[:cursor])
-			buf.WriteString("#")
-			buf.Write(file[cursor:])
-			log.Print(buf.String())
-			log.Println("-------------------------------------------------------")
-		}
+		buf.WriteString("-------------------------------------------------------\n")
+		buf.Write(file[:cursor])
+		buf.WriteString("#")
+		buf.Write(file[cursor:])
+		log.Print(buf.String())
+		log.Println("-------------------------------------------------------")
 	}
 	candidates, d := g_daemon.autocomplete.apropos(file, filename, cursor)
 	if *g_debug {

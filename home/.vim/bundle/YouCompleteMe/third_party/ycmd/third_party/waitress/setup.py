@@ -12,6 +12,7 @@
 #
 ##############################################################################
 import os
+import sys
 from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -32,13 +33,16 @@ testing_extras = [
     'coverage',
 ]
 
+if sys.version_info[:2] == (2, 6):
+    testing_extras.append('unittest2')
+
 setup(
     name='waitress',
-    version='1.0.2',
+    version='0.8.10',
     author='Zope Foundation and Contributors',
     author_email='zope-dev@zope.org',
-    maintainer="Pylons Project",
-    maintainer_email="pylons-discuss@googlegroups.com",
+    maintainer="Chris McDonough",
+    maintainer_email="chrism@plope.com",
     description='Waitress WSGI server',
     long_description=README + '\n\n' + CHANGES,
     license='ZPL 2.1',
@@ -50,12 +54,13 @@ setup(
         'License :: OSI Approved :: Zope Public License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.2',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
         'Natural Language :: English',

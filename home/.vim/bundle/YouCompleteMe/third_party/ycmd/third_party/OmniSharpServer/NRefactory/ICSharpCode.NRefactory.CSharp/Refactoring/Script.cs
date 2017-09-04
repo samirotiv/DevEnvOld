@@ -32,7 +32,7 @@ using ICSharpCode.NRefactory.TypeSystem;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Text;
-using ICSharpCode.NRefactory.MonoCSharp;
+using Mono.CSharp;
 using ITypeDefinition = ICSharpCode.NRefactory.TypeSystem.ITypeDefinition;
 
 namespace ICSharpCode.NRefactory.CSharp.Refactoring
@@ -624,7 +624,7 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 		}
 	}
 
-	public static class ExtMethods
+	static class ExtMethods
 	{
 		public static void ContinueScript (this Task task, Action act)
 		{

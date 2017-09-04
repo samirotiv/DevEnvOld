@@ -1,8 +1,13 @@
 if __name__ != '__main__':
     raise ImportError('This is not a module, but a script.')
 
-import sys, os, socket
+try:
+    import coverage
+    coverage.process_startup()
+except ImportError:
+    pass
 
+import sys, os, socket
 test_root = os.path.dirname(os.path.abspath(__file__))
 os.chdir(test_root)
 sys.path.insert(0, os.path.dirname(test_root))
@@ -18,12 +23,6 @@ try:
     elif server == 'eventlet':
         import eventlet
         eventlet.monkey_patch()
-
-    try:
-        import coverage
-        coverage.process_startup()
-    except ImportError:
-        pass
 
     from bottle import route, run
     route('/test', callback=lambda: 'OK')

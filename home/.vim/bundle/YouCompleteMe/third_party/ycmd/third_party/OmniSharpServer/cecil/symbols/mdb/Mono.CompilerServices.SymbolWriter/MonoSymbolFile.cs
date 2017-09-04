@@ -1,13 +1,12 @@
 //
-// MonoSymbolFile.cs
+// Mono.CSharp.Debugger/MonoSymbolFile.cs
 //
-// Authors:
+// Author:
 //   Martin Baulig (martin@ximian.com)
-//   Marek Safar (marek.safar@gmail.com)
 //
 // (C) 2003 Ximian, Inc.  http://www.ximian.com
-// Copyright (C) 2012 Xamarin Inc (http://www.xamarin.com)
 //
+
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -31,7 +30,10 @@
 
 using System;
 using System.Reflection;
+using SRE = System.Reflection.Emit;
 using System.Collections.Generic;
+using System.Text;
+using System.Threading;
 using System.IO;
 
 namespace Mono.CompilerServices.SymbolWriter
@@ -44,16 +46,10 @@ namespace Mono.CompilerServices.SymbolWriter
 
 		public MonoSymbolFileException (string message, params object[] args)
 			: base (String.Format (message, args))
-		{
-		}
-
-		public MonoSymbolFileException (string message, Exception innerException)
-			: base (message, innerException)
-		{
-		}
+		{ }
 	}
 
-	sealed class MyBinaryWriter : BinaryWriter
+	internal class MyBinaryWriter : BinaryWriter
 	{
 		public MyBinaryWriter (Stream stream)
 			: base (stream)
@@ -113,11 +109,64 @@ namespace Mono.CompilerServices.SymbolWriter
 		}
 	}
 
+#if !CECIL
+	internal class MonoDebuggerSupport
+	{
+		static GetMethodTokenFunc get_method_token;
+		static GetGuidFunc get_guid;
+		static GetLocalIndexFunc get_local_index;
+
+		delegate int GetMethodTokenFunc (MethodBase method);
+		delegate Guid GetGuidFunc (Module module);
+		delegate int GetLocalIndexFunc (SRE.LocalBuilder local);
+
+		static Delegate create_delegate (Type type, Type delegate_type, string name)
+		{
+			MethodInfo mi = type.GetMethod (name, BindingFlags.Static |
+							BindingFlags.NonPublic);
+			if (mi == null)
+				throw new Exception ("Can't find " + name);
+
+			return Delegate.CreateDelegate (delegate_type, mi);
+		}
+
+		static MonoDebuggerSupport ()
+		{
+			get_method_token = (GetMethodTokenFunc) create_delegate (
+				typeof (Assembly), typeof (GetMethodTokenFunc),
+				"MonoDebugger_GetMethodToken");
+
+			get_guid = (GetGuidFunc) create_delegate (
+				typeof (Module), typeof (GetGuidFunc), "Mono_GetGuid");
+
+			get_local_index = (GetLocalIndexFunc) create_delegate (
+				typeof (SRE.LocalBuilder), typeof (GetLocalIndexFunc),
+				"Mono_GetLocalIndex");
+		}
+
+		public static int GetMethodToken (MethodBase method)
+		{
+			return get_method_token (method);
+		}
+
+		public static Guid GetGuid (Module module)
+		{
+			return get_guid (module);
+		}
+
+		public static int GetLocalIndex (SRE.LocalBuilder local)
+		{
+			return get_local_index (local);
+		}
+	}
+#endif
+
 	public class MonoSymbolFile : IDisposable
 	{
 		List<MethodEntry> methods = new List<MethodEntry> ();
 		List<SourceFileEntry> sources = new List<SourceFileEntry> ();
 		List<CompileUnitEntry> comp_units = new List<CompileUnitEntry> ();
+		Dictionary<Type, int> type_hash = new Dictionary<Type, int> ();
 		Dictionary<int, AnonymousScopeEntry> anonymous_scopes;
 
 		OffsetTable ot;
@@ -125,29 +174,41 @@ namespace Mono.CompilerServices.SymbolWriter
 		int last_method_index;
 		int last_namespace_index;
 
+		public readonly string FileName = "<dynamic>";
 		public readonly int MajorVersion = OffsetTable.MajorVersion;
 		public readonly int MinorVersion = OffsetTable.MinorVersion;
 
 		public int NumLineNumbers;
 
-		public MonoSymbolFile ()
+		internal MonoSymbolFile ()
 		{
 			ot = new OffsetTable ();
 		}
 
-		public int AddSource (SourceFileEntry source)
+		internal int AddSource (SourceFileEntry source)
 		{
 			sources.Add (source);
 			return sources.Count;
 		}
 
-		public int AddCompileUnit (CompileUnitEntry entry)
+		internal int AddCompileUnit (CompileUnitEntry entry)
 		{
 			comp_units.Add (entry);
 			return comp_units.Count;
 		}
 
-		public void AddMethod (MethodEntry entry)
+		internal int DefineType (Type type)
+		{
+			int index;
+			if (type_hash.TryGetValue (type, out index))
+				return index;
+
+			index = ++last_type_index;
+			type_hash.Add (type, index);
+			return index;
+		}
+
+		internal void AddMethod (MethodEntry entry)
 		{
 			methods.Add (entry);
 		}
@@ -234,7 +295,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			//
 			methods.Sort ();
 			for (int i = 0; i < methods.Count; i++)
-				methods [i].Index = i + 1;
+				((MethodEntry) methods [i]).Index = i + 1;
 
 			//
 			// Write data sections.
@@ -253,7 +314,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			//
 			ot.MethodTableOffset = (int) bw.BaseStream.Position;
 			for (int i = 0; i < methods.Count; i++) {
-				MethodEntry entry = methods [i];
+				MethodEntry entry = (MethodEntry) methods [i];
 				entry.Write (bw);
 			}
 			ot.MethodTableSize = (int) bw.BaseStream.Position - ot.MethodTableOffset;
@@ -263,7 +324,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			//
 			ot.SourceTableOffset = (int) bw.BaseStream.Position;
 			for (int i = 0; i < sources.Count; i++) {
-				SourceFileEntry source = sources [i];
+				SourceFileEntry source = (SourceFileEntry) sources [i];
 				source.Write (bw);
 			}
 			ot.SourceTableSize = (int) bw.BaseStream.Position - ot.SourceTableOffset;
@@ -273,7 +334,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			//
 			ot.CompileUnitTableOffset = (int) bw.BaseStream.Position;
 			for (int i = 0; i < comp_units.Count; i++) {
-				CompileUnitEntry unit = comp_units [i];
+				CompileUnitEntry unit = (CompileUnitEntry) comp_units [i];
 				unit.Write (bw);
 			}
 			ot.CompileUnitTableSize = (int) bw.BaseStream.Position - ot.CompileUnitTableOffset;
@@ -330,8 +391,10 @@ namespace Mono.CompilerServices.SymbolWriter
 
 		Guid guid;
 
-		MonoSymbolFile (Stream stream)
+		MonoSymbolFile (string filename)
 		{
+			this.FileName = filename;
+			FileStream stream = new FileStream (filename, FileMode.Open, FileAccess.Read);
 			reader = new MyBinaryReader (stream);
 
 			try {
@@ -340,58 +403,94 @@ namespace Mono.CompilerServices.SymbolWriter
 				int minor_version = reader.ReadInt32 ();
 
 				if (magic != OffsetTable.Magic)
-					throw new MonoSymbolFileException ("Symbol file is not a valid");
+					throw new MonoSymbolFileException (
+						"Symbol file `{0}' is not a valid " +
+						"Mono symbol file", filename);
 				if (major_version != OffsetTable.MajorVersion)
 					throw new MonoSymbolFileException (
-						"Symbol file has version {0} but expected {1}", major_version, OffsetTable.MajorVersion);
+						"Symbol file `{0}' has version {1}, " +
+						"but expected {2}", filename, major_version,
+						OffsetTable.MajorVersion);
 				if (minor_version != OffsetTable.MinorVersion)
-					throw new MonoSymbolFileException ("Symbol file has version {0}.{1} but expected {2}.{3}",
-						major_version, minor_version,
-						OffsetTable.MajorVersion, OffsetTable.MinorVersion);
+					throw new MonoSymbolFileException (
+						"Symbol file `{0}' has version {1}.{2}, " +
+						"but expected {3}.{4}", filename, major_version,
+						minor_version, OffsetTable.MajorVersion,
+						OffsetTable.MinorVersion);
 
 				MajorVersion = major_version;
 				MinorVersion = minor_version;
 				guid = new Guid (reader.ReadBytes (16));
 
 				ot = new OffsetTable (reader, major_version, minor_version);
-			} catch (Exception e) {
-				throw new MonoSymbolFileException ("Cannot read symbol file", e);
+			} catch {
+				throw new MonoSymbolFileException (
+					"Cannot read symbol file `{0}'", filename);
 			}
 
 			source_file_hash = new Dictionary<int, SourceFileEntry> ();
 			compile_unit_hash = new Dictionary<int, CompileUnitEntry> ();
 		}
 
-#if !NET_CORE
+		void CheckGuidMatch (Guid other, string filename, string assembly)
+		{
+			if (other == guid)
+				return;
+
+			throw new MonoSymbolFileException (
+				"Symbol file `{0}' does not match assembly `{1}'",
+				filename, assembly);
+		}
+
+#if CECIL
+		protected MonoSymbolFile (string filename, Mono.Cecil.ModuleDefinition module)
+			: this (filename)
+		{
+			// Check that the MDB file matches the module, if we have been
+			// passed a module.
+			if (module == null)
+				return;
+
+			CheckGuidMatch (module.Mvid, filename, module.FullyQualifiedName);
+		}
+
+		public static MonoSymbolFile ReadSymbolFile (Mono.Cecil.ModuleDefinition module)
+		{
+			return ReadSymbolFile (module, module.FullyQualifiedName);
+		}
+
+		public static MonoSymbolFile ReadSymbolFile (Mono.Cecil.ModuleDefinition module, string filename)
+		{
+			string name = filename + ".mdb";
+
+			return new MonoSymbolFile (name, module);
+		}
+#else
+		protected MonoSymbolFile (string filename, Assembly assembly) : this (filename)
+		{
+			// Check that the MDB file matches the assembly, if we have been
+			// passed an assembly.
+			if (assembly == null)
+				return;
+
+			Module[] modules = assembly.GetModules ();
+			Guid assembly_guid = MonoDebuggerSupport.GetGuid (modules [0]);
+
+			CheckGuidMatch (assembly_guid, filename, assembly.Location);
+		}
+
 		public static MonoSymbolFile ReadSymbolFile (Assembly assembly)
 		{
 			string filename = assembly.Location;
 			string name = filename + ".mdb";
 
-			Module[] modules = assembly.GetModules ();
-			Guid assembly_guid = modules[0].ModuleVersionId;
-
-			return ReadSymbolFile (name, assembly_guid);
+			return new MonoSymbolFile (name, assembly);
 		}
 #endif
 
 		public static MonoSymbolFile ReadSymbolFile (string mdbFilename)
 		{
-			return ReadSymbolFile (new FileStream (mdbFilename, FileMode.Open, FileAccess.Read));
-		}
-
-		public static MonoSymbolFile ReadSymbolFile (string mdbFilename, Guid assemblyGuid)
-		{
-			var sf = ReadSymbolFile (mdbFilename);
-			if (assemblyGuid != sf.guid)
-				throw new MonoSymbolFileException ("Symbol file `{0}' does not match assembly", mdbFilename);
-
-			return sf;
-		}
-
-		public static MonoSymbolFile ReadSymbolFile (Stream stream)
-		{
-			return new MonoSymbolFile (stream);
+			return new MonoSymbolFile (mdbFilename);
 		}
 
 		public int CompileUnitCount {
@@ -549,7 +648,7 @@ namespace Mono.CompilerServices.SymbolWriter
 
 			lock (this) {
 				read_methods ();
-				return method_list [index - 1];
+				return (MethodEntry) method_list [index - 1];
 			}
 		}
 
@@ -630,11 +729,7 @@ namespace Mono.CompilerServices.SymbolWriter
 		{
 			if (disposing) {
 				if (reader != null) {
-#if NET_CORE
-					reader.Dispose ();
-#else
 					reader.Close ();
-#endif
 					reader = null;
 				}
 			}

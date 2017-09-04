@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 YouCompleteMe contributors
+# Copyright (C) 2016 YouCompleteMe contributors
 #
 # This file is part of YouCompleteMe.
 #
@@ -19,24 +19,23 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 from ycm.tests.test_utils import MockVimModule
 MockVimModule()
 
 from nose.tools import ok_
-from ycm.paths import _EndsWithPython
+from ycm.paths import EndsWithPython
 
 
 def EndsWithPython_Good( path ):
-  ok_( _EndsWithPython( path ),
-       'Path {0} does not end with a Python name.'.format( path ) )
+  ok_( EndsWithPython( path ) )
 
 
 def EndsWithPython_Bad( path ):
-  ok_( not _EndsWithPython( path ),
-       'Path {0} does end with a Python name.'.format( path ) )
+  ok_( not EndsWithPython( path ) )
 
 
 def EndsWithPython_Python2Paths_test():
@@ -45,12 +44,12 @@ def EndsWithPython_Python2Paths_test():
     'python2',
     '/usr/bin/python2.6',
     '/home/user/.pyenv/shims/python2.7',
-    r'C:\Python26\python.exe',
-    '/Contents/MacOS/Python'
+    r'C:\Python26\python.exe'
   ]
 
   for path in python_paths:
     yield EndsWithPython_Good, path
+
 
 
 def EndsWithPython_Python3Paths_test():

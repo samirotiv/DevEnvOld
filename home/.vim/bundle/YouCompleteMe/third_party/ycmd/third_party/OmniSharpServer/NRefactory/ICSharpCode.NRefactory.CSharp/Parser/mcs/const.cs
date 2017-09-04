@@ -15,7 +15,7 @@ using IKVM.Reflection;
 using System.Reflection;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	public class Const : FieldBase
 	{

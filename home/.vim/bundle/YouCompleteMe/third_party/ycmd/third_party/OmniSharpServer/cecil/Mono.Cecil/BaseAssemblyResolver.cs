@@ -1,11 +1,29 @@
 //
+// BaseAssemblyResolver.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
@@ -33,10 +51,10 @@ namespace Mono.Cecil {
 		}
 	}
 
-#if !NET_CORE
+#if !SILVERLIGHT && !CF
 	[Serializable]
 #endif
-	public sealed class AssemblyResolutionException : FileNotFoundException {
+	public class AssemblyResolutionException : FileNotFoundException {
 
 		readonly AssemblyNameReference reference;
 
@@ -45,18 +63,13 @@ namespace Mono.Cecil {
 		}
 
 		public AssemblyResolutionException (AssemblyNameReference reference)
-			: this (reference, null)
-		{
-		}
-
-		public AssemblyResolutionException (AssemblyNameReference reference, Exception innerException)
-			: base (string.Format ("Failed to resolve assembly: '{0}'", reference), innerException)
+			: base (string.Format ("Failed to resolve assembly: '{0}'", reference))
 		{
 			this.reference = reference;
 		}
 
-#if !NET_CORE
-		AssemblyResolutionException (
+#if !SILVERLIGHT && !CF
+		protected AssemblyResolutionException (
 			System.Runtime.Serialization.SerializationInfo info,
 			System.Runtime.Serialization.StreamingContext context)
 			: base (info, context)
@@ -65,14 +78,15 @@ namespace Mono.Cecil {
 #endif
 	}
 
-#if !NET_CORE
 	public abstract class BaseAssemblyResolver : IAssemblyResolver {
 
 		static readonly bool on_mono = Type.GetType ("Mono.Runtime") != null;
 
 		readonly Collection<string> directories;
 
+#if !SILVERLIGHT && !CF
 		Collection<string> gac_paths;
+#endif
 
 		public void AddSearchDirectory (string directory)
 		{
@@ -89,6 +103,19 @@ namespace Mono.Cecil {
 			var directories = new string [this.directories.size];
 			Array.Copy (this.directories.items, directories, directories.Length);
 			return directories;
+		}
+
+		public virtual AssemblyDefinition Resolve (string fullName)
+		{
+			return Resolve (fullName, new ReaderParameters ());
+		}
+
+		public virtual AssemblyDefinition Resolve (string fullName, ReaderParameters parameters)
+		{
+			if (fullName == null)
+				throw new ArgumentNullException ("fullName");
+
+			return Resolve (AssemblyNameReference.Parse (fullName), parameters);
 		}
 
 		public event AssemblyResolveEventHandler ResolveFailure;
@@ -113,27 +140,27 @@ namespace Mono.Cecil {
 
 		public virtual AssemblyDefinition Resolve (AssemblyNameReference name, ReaderParameters parameters)
 		{
-			Mixin.CheckName (name);
-			Mixin.CheckParameters (parameters);
+			if (name == null)
+				throw new ArgumentNullException ("name");
+			if (parameters == null)
+				parameters = new ReaderParameters ();
 
 			var assembly = SearchDirectory (name, directories, parameters);
 			if (assembly != null)
 				return assembly;
 
+#if !SILVERLIGHT && !CF
 			if (name.IsRetargetable) {
 				// if the reference is retargetable, zero it
-				name = new AssemblyNameReference (name.Name, Mixin.ZeroVersion) {
+				name = new AssemblyNameReference (name.Name, new Version (0, 0, 0, 0)) {
 					PublicKeyToken = Empty<byte>.Array,
 				};
 			}
 
 			var framework_dir = Path.GetDirectoryName (typeof (object).Module.FullyQualifiedName);
-			var framework_dirs = on_mono
-				? new [] { framework_dir, Path.Combine (framework_dir, "Facades") }
-				: new [] { framework_dir };
 
 			if (IsZero (name.Version)) {
-				assembly = SearchDirectory (name, framework_dirs, parameters);
+				assembly = SearchDirectory (name, new [] { framework_dir }, parameters);
 				if (assembly != null)
 					return assembly;
 			}
@@ -148,9 +175,10 @@ namespace Mono.Cecil {
 			if (assembly != null)
 				return assembly;
 
-			assembly = SearchDirectory (name, framework_dirs, parameters);
+			assembly = SearchDirectory (name, new [] { framework_dir }, parameters);
 			if (assembly != null)
 				return assembly;
+#endif
 
 			if (ResolveFailure != null) {
 				assembly = ResolveFailure (this, name);
@@ -163,17 +191,12 @@ namespace Mono.Cecil {
 
 		AssemblyDefinition SearchDirectory (AssemblyNameReference name, IEnumerable<string> directories, ReaderParameters parameters)
 		{
-			var extensions = name.IsWindowsRuntime ? new [] { ".winmd", ".dll" } : new [] { ".exe", ".dll" };
+			var extensions = new [] { ".exe", ".dll" };
 			foreach (var directory in directories) {
 				foreach (var extension in extensions) {
 					string file = Path.Combine (directory, name.Name + extension);
-					if (!File.Exists (file))
-						continue;
-					try {
+					if (File.Exists (file))
 						return GetAssembly (file, parameters);
-					} catch (System.BadImageFormatException) {
-						continue;
-					}
 				}
 			}
 
@@ -182,9 +205,10 @@ namespace Mono.Cecil {
 
 		static bool IsZero (Version version)
 		{
-			return version.Major == 0 && version.Minor == 0 && version.Build == 0 && version.Revision == 0;
+			return version == null || (version.Major == 0 && version.Minor == 0 && version.Build == 0 && version.Revision == 0);
 		}
 
+#if !SILVERLIGHT && !CF
 		AssemblyDefinition GetCorlib (AssemblyNameReference reference, ReaderParameters parameters)
 		{
 			var version = reference.Version;
@@ -311,7 +335,7 @@ namespace Mono.Cecil {
 
 		AssemblyDefinition GetAssemblyInNetGac (AssemblyNameReference reference, ReaderParameters parameters)
 		{
-			var gacs = new [] { "GAC_MSIL", "GAC_32", "GAC_64", "GAC" };
+			var gacs = new [] { "GAC_MSIL", "GAC_32", "GAC" };
 			var prefixes = new [] { string.Empty, "v4.0_" };
 
 			for (int i = 0; i < 2; i++) {
@@ -341,16 +365,6 @@ namespace Mono.Cecil {
 					Path.Combine (gac, reference.Name), gac_folder.ToString ()),
 				reference.Name + ".dll");
 		}
-
-		public void Dispose ()
-		{
-			Dispose (true);
-			GC.SuppressFinalize (this);
-		}
-
-		protected virtual void Dispose (bool disposing)
-		{
-		}
-	}
 #endif
+	}
 }

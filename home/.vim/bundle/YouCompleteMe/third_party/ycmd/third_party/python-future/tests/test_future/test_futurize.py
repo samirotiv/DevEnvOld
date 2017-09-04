@@ -631,9 +631,7 @@ class TestFuturizeRenamedStdlib(CodeHandler):
         import pickle
         import io
         """
-        # We can't run the converted code because configparser may
-        # not be there.
-        self.convert_check(before, after, run=False)
+        self.convert_check(before, after)
 
     @unittest.skip('Not working yet ...')
     def test_urllib_refactor(self):

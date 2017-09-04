@@ -21,7 +21,7 @@ using IKVM.Reflection.Emit;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	public abstract class YieldStatement<T> : ResumableStatement where T : StateMachineInitializer
 	{
@@ -74,9 +74,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		public void RegisterResumePoint ()
 		{
-			if (resume_pc != 0)
-				return;
-
 			if (inside_try_block == null) {
 				resume_pc = machine_initializer.AddResumePoint (this);
 			} else {
@@ -207,12 +204,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		protected StateMachine (ParametersBlock block, TypeDefinition parent, MemberBase host, TypeParameters tparams, string name, MemberKind kind)
 			: base (block, parent, host, tparams, name, kind)
 		{
-			OriginalTypeParameters = tparams;
 		}
 
 		#region Properties
-
-		public TypeParameters OriginalTypeParameters { get; private set; }
 
 		public StateMachineMethod StateMachineMethod {
 			get {
@@ -726,7 +720,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		//
 		// The state as we generate the machine
 		//
-		protected Label move_next_ok;
+		Label move_next_ok;
+		Label iterator_body_end;
 		protected Label move_next_error;
 		LocalBuilder skip_finally;
 		protected LocalBuilder current_pc;
@@ -740,7 +735,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 		#region Properties
 
-		public Label BodyEnd { get; set; }
+		public Label BodyEnd {
+			get {
+				return iterator_body_end;
+			}
+		}
 
 		public LocalBuilder CurrentPC
 		{
@@ -828,18 +827,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			// We only care if the PC is zero (start executing) or non-zero (don't do anything)
 			ec.Emit (OpCodes.Brtrue, move_next_error);
 
-			BodyEnd = ec.DefineLabel ();
-
-			var async_init = this as AsyncInitializer;
-			if (async_init != null)
-				ec.BeginExceptionBlock ();
+			iterator_body_end = ec.DefineLabel ();
 
 			block.EmitEmbedded (ec);
 
-			if (async_init != null)
-				async_init.EmitCatchBlock (ec);
-
-			ec.MarkLabel (BodyEnd);
+			ec.MarkLabel (iterator_body_end);
 
 			EmitMoveNextEpilogue (ec);
 
@@ -849,8 +841,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				ec.EmitInt (0);
 				ec.Emit (OpCodes.Ret);
 			}
-
-			ec.MarkLabel (move_next_ok);
 		}
 
 		void EmitMoveNext (EmitContext ec)
@@ -900,14 +890,26 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 			ec.MarkLabel (labels[0]);
 
-			BodyEnd = ec.DefineLabel ();
+			iterator_body_end = ec.DefineLabel ();
 
 			block.EmitEmbedded (ec);
 
-			ec.MarkLabel (BodyEnd);
+			ec.MarkLabel (iterator_body_end);
 
 			if (async_init != null) {
-				async_init.EmitCatchBlock (ec);
+				var catch_value = LocalVariable.CreateCompilerGenerated (ec.Module.Compiler.BuiltinTypes.Exception, block, Location);
+
+				ec.BeginCatchBlock (catch_value.Type);
+				catch_value.EmitAssign (ec);
+
+				ec.EmitThis ();
+				ec.EmitInt ((int) IteratorStorey.State.After);
+				ec.Emit (OpCodes.Stfld, storey.PC.Spec);
+
+				((AsyncTaskStorey) async_init.Storey).EmitSetException (ec, new LocalVariableReference (catch_value, Location));
+
+				ec.Emit (OpCodes.Leave, move_next_ok);
+				ec.EndExceptionBlock ();
 			}
 
 			ec.Mark (Block.Original.EndLocation);

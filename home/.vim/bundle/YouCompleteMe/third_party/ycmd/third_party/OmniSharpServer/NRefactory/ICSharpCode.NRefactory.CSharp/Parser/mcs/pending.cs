@@ -24,7 +24,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	struct TypeAndMethods {
 		public TypeSpec          type;
@@ -108,7 +108,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			throw new NotImplementedException ();
 		}
 
-		public ExtensionMethodCandidates LookupExtensionMethod (string name, int arity)
+		public ExtensionMethodCandidates LookupExtensionMethod (TypeSpec extensionType, string name, int arity)
 		{
 			throw new NotImplementedException ();
 		}

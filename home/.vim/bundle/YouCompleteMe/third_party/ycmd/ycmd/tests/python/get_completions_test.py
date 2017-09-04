@@ -21,7 +21,8 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 from nose.tools import eq_
@@ -153,7 +154,7 @@ def GetCompletions_Unicode_InLine_test( app ):
       'response': requests.codes.ok,
       'data': has_entries( {
         'completions': contains(
-          CompletionEntryMatcher( 'center', 'def center' )
+          CompletionEntryMatcher( 'center', 'function: builtins.str.center' )
         ),
         'errors': empty(),
       } )

@@ -21,10 +21,12 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+from future.utils import iteritems
+standard_library.install_aliases()
 from builtins import *  # noqa
 
-from future.utils import iteritems, PY2
+from future.utils import PY2
 from hamcrest import contains_string, has_entry, has_entries, assert_that
 from mock import patch
 from webtest import TestApp
@@ -155,6 +157,18 @@ def PatchCompleter( completer, filetype ):
 
 
 @contextlib.contextmanager
+def UserOption( key, value ):
+  try:
+    current_options = dict( user_options_store.GetAll() )
+    user_options = current_options.copy()
+    user_options.update( { key: value } )
+    handlers.UpdateUserOptions( user_options )
+    yield user_options
+  finally:
+    handlers.UpdateUserOptions( current_options )
+
+
+@contextlib.contextmanager
 def CurrentWorkingDirectory( path ):
   old_cwd = GetCurrentDirectory()
   os.chdir( path )
@@ -171,15 +185,6 @@ def TemporaryExecutable( extension = '.exe' ):
                                     suffix = extension ) as executable:
     os.chmod( executable.name, stat.S_IXUSR )
     yield executable.name
-
-
-@contextlib.contextmanager
-def TemporarySymlink( source, link ):
-  os.symlink( source, link )
-  try:
-    yield
-  finally:
-    os.remove( link )
 
 
 def SetUpApp( custom_options = {} ):
@@ -206,17 +211,20 @@ def StopCompleterServer( app, filetype, filepath = '/foo' ):
                  expect_errors = True )
 
 
-def WaitUntilCompleterServerReady( app, filetype, timeout = 30 ):
-  expiration = time.time() + timeout
-  while True:
-    if time.time() > expiration:
-      raise RuntimeError( 'Waited for the {0} subserver to be ready for '
-                          '{1} seconds, aborting.'.format( filetype, timeout ) )
+def WaitUntilCompleterServerReady( app, filetype ):
+  retries = 100
 
-    if app.get( '/ready', { 'subserver': filetype } ).json:
+  while retries > 0:
+    result = app.get( '/ready', { 'subserver': filetype } ).json
+    if result:
       return
 
-    time.sleep( 0.1 )
+    time.sleep( 0.2 )
+    retries = retries - 1
+
+  raise RuntimeError(
+    'Timeout waiting for "{0}" filetype completer'.format( filetype ) )
+
 
 
 def ClearCompletionsCache():

@@ -32,7 +32,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	/// <summary>
 	///   Base class for objects that can have Attributes applied to them.
@@ -257,22 +257,19 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			Report.Error (1970, loc, "Do not use `{0}' directly. Use `dynamic' keyword instead", GetSignatureForError ());
 		}
 
-		void Error_AttributeEmitError (string inner)
+		/// <summary>
+		/// This is rather hack. We report many emit attribute error with same error to be compatible with
+		/// csc. But because csc has to report them this way because error came from ilasm we needn't.
+		/// </summary>
+		public void Error_AttributeEmitError (string inner)
 		{
 			Report.Error (647, Location, "Error during emitting `{0}' attribute. The reason is `{1}'",
 				      Type.GetSignatureForError (), inner);
 		}
 
-		public void Error_InvalidArgumentValue (TypeSpec attributeType)
-		{
-			Report.Error (591, Location, "Invalid value for argument to `{0}' attribute", attributeType.GetSignatureForError ());
-		}
-
 		public void Error_InvalidSecurityParent ()
 		{
-			Report.Error (7070, Location,
-				"Security attribute `{0}' is not valid on this declaration type. Security attributes are only valid on assembly, type and method declarations",
-				Type.GetSignatureForError ());
+			Error_AttributeEmitError ("it is attached to invalid parent");
 		}
 
 		Attributable Owner {
@@ -414,7 +411,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			return ((MethodImplOptions) value | all) == all;
 		}
 
-		public static bool IsValidArgumentType (TypeSpec t)
+		static bool IsValidArgumentType (TypeSpec t)
 		{
 			if (t.IsArray) {
 				var ac = (ArrayContainer) t;
@@ -837,8 +834,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		/// </summary>
 		bool IsSecurityActionValid ()
 		{
-			Constant c = null;
-			var action = GetSecurityActionValue (ref c);
+			SecurityAction action = GetSecurityActionValue ();
 			bool for_assembly = Target == AttributeTargets.Assembly || Target == AttributeTargets.Module;
 
 			switch (action) {
@@ -860,50 +856,19 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					return true;
 				break;
 #pragma warning restore 618
-			case null:
-				Report.Error (7048, loc, "First argument of a security attribute `{0}' must be a valid SecurityAction",
-					Type.GetSignatureForError ());
-				return false;
 
 			default:
-				Report.Error (7049, c.Location, "Security attribute `{0}' has an invalid SecurityAction value `{1}'",
-					Type.GetSignatureForError (), c.GetValueAsLiteral());
+				Error_AttributeEmitError ("SecurityAction is out of range");
 				return false;
 			}
 
-			switch (Target) {
-			case AttributeTargets.Assembly:
-				Report.Error (7050, c.Location, "SecurityAction value `{0}' is invalid for security attributes applied to an assembly",
-					c.GetSignatureForError ());
-				break;
-			default:
-				Report.Error (7051, c.Location, "SecurityAction value `{0}' is invalid for security attributes applied to a type or a method",
-					c.GetSignatureForError ());
-				break;
-			}
-
+			Error_AttributeEmitError (String.Concat ("SecurityAction `", action, "' is not valid for this declaration"));
 			return false;
 		}
 
-		SecurityAction? GetSecurityActionValue (ref Constant value)
+		System.Security.Permissions.SecurityAction GetSecurityActionValue ()
 		{
-			if (pos_args == null) {
-				var predefined = context.Module.PredefinedAttributes;
-
-				//
-				// BCL defines System.Security.Permissions.HostProtectionAttribute with parameterless
-				// contructor which should not be valid but it's already part of the framework
-				//
-				if (Type == predefined.HostProtection.TypeSpec) {
-					value = new IntConstant (context.Module.Compiler.BuiltinTypes, (int)SecurityAction.LinkDemand, loc);
-					return SecurityAction.LinkDemand;
-				}
-
-				return null;
-			}
-
-			value = (Constant) pos_args [0].Expr;
-			return (SecurityAction) value.GetValue ();
+			return (SecurityAction) ((Constant) pos_args[0].Expr).GetValue ();
 		}
 
 		/// <summary>
@@ -913,14 +878,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		public void ExtractSecurityPermissionSet (MethodSpec ctor, ref SecurityType permissions)
 		{
 #if STATIC
-			object[] values;
-			if (pos_args != null) {
-				values = new object[pos_args.Count];
-				for (int i = 0; i < values.Length; ++i)
-					values[i] = ((Constant) pos_args[i].Expr).GetValue ();
-			} else {
-				values = null;
-			}
+			object[] values = new object[pos_args.Count];
+			for (int i = 0; i < values.Length; ++i)
+				values[i] = ((Constant) pos_args[i].Expr).GetValue ();
 
 			PropertyInfo[] prop;
 			object[] prop_values;
@@ -1071,42 +1031,44 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 									return;
 								}
 							} else if (Type == predefined.Guid) {
-								string v = ((StringConstant) arg_expr).Value;
 								try {
+									string v = ((StringConstant) arg_expr).Value;
 									new Guid (v);
-								} catch {
-									Error_InvalidArgumentValue (Type);
+								} catch (Exception e) {
+									Error_AttributeEmitError (e.Message);
 									return;
 								}
 							} else if (Type == predefined.AttributeUsage) {
 								int v = ((IntConstant) ((EnumConstant) arg_expr).Child).Value;
-								if (v == 0)
-									Error_InvalidArgumentValue (Type);
+								if (v == 0) {
+									context.Module.Compiler.Report.Error (591, Location, "Invalid value for argument to `{0}' attribute",
+										"System.AttributeUsage");
+								}
 							} else if (Type == predefined.MarshalAs) {
 								if (pos_args.Count == 1) {
 									var u_type = (UnmanagedType) System.Enum.Parse (typeof (UnmanagedType), ((Constant) pos_args[0].Expr).GetValue ().ToString ());
 									if (u_type == UnmanagedType.ByValArray && !(Owner is FieldBase)) {
-										Report.Error (7055, pos_args [0].Expr.Location, "Unmanaged type `ByValArray' is only valid for fields");
+										Error_AttributeEmitError ("Specified unmanaged type is only valid on fields");
 									}
 								}
 							} else if (Type == predefined.DllImport) {
 								if (pos_args.Count == 1 && pos_args[0].Expr is Constant) {
 									var value = ((Constant) pos_args[0].Expr).GetValue () as string;
 									if (string.IsNullOrEmpty (value))
-										Error_InvalidArgumentValue (Type);
+										Error_AttributeEmitError ("DllName cannot be empty or null");
 								}
 							} else if (Type == predefined.MethodImpl) {
 								if (pos_args.Count == 1) {
 									var value = (int) ((Constant) arg_expr).GetValueAsLong ();
 
 									if (!IsValidMethodImplOption (value)) {
-										Error_InvalidArgumentValue (Type);
+										Error_AttributeEmitError ("Incorrect argument value");
 									}
 								}
 							}
 						}
 
-						arg_expr.EncodeAttributeValue (context, encoder, pt, pt);
+						arg_expr.EncodeAttributeValue (context, encoder, pt);
 					}
 				}
 
@@ -1120,7 +1082,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 						encoder.Encode (na.Key.Type);
 						encoder.Encode (na.Value.Name);
-						na.Value.Expr.EncodeAttributeValue (context, encoder, na.Key.Type, na.Key.Type);
+						na.Value.Expr.EncodeAttributeValue (context, encoder, na.Key.Type);
 					}
 				} else {
 					encoder.EncodeEmptyNamedArguments ();
@@ -1584,7 +1546,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			Encode ((byte) 0x54); // property
 			Encode (property.MemberType);
 			Encode (property.Name);
-			value.EncodeAttributeValue (null, this, property.MemberType, property.MemberType);
+			value.EncodeAttributeValue (null, this, property.MemberType);
 		}
 
 		//
@@ -1596,7 +1558,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			Encode ((byte) 0x53); // field
 			Encode (field.MemberType);
 			Encode (field.Name);
-			value.EncodeAttributeValue (null, this, field.MemberType, field.MemberType);
+			value.EncodeAttributeValue (null, this, field.MemberType);
 		}
 
 		public void EncodeNamedArguments<T> (T[] members, Constant[] values) where T : MemberSpec, IInterfaceMemberSpec
@@ -1616,7 +1578,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 				Encode (member.MemberType);
 				Encode (member.Name);
-				values [i].EncodeAttributeValue (null, this, member.MemberType, member.MemberType);
+				values [i].EncodeAttributeValue (null, this, member.MemberType);
 			}
 		}
 
@@ -1723,7 +1685,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		public readonly PredefinedDebuggerBrowsableAttribute DebuggerBrowsable;
 		public readonly PredefinedAttribute DebuggerStepThrough;
 		public readonly PredefinedDebuggableAttribute Debuggable;
-		public readonly PredefinedAttribute HostProtection;
 
 		// New in .NET 3.5
 		public readonly PredefinedAttribute Extension;
@@ -1743,6 +1704,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		public readonly PredefinedAttribute FieldOffset;
 		public readonly PredefinedAttribute AssemblyProduct;
 		public readonly PredefinedAttribute AssemblyCompany;
+		public readonly PredefinedAttribute AssemblyDescription;
 		public readonly PredefinedAttribute AssemblyCopyright;
 		public readonly PredefinedAttribute AssemblyTrademark;
 		public readonly PredefinedAttribute CallerMemberNameAttribute;
@@ -1778,7 +1740,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			DefaultParameterValue = new PredefinedAttribute (module, "System.Runtime.InteropServices", "DefaultParameterValueAttribute");
 			OptionalParameter = new PredefinedAttribute (module, "System.Runtime.InteropServices", "OptionalAttribute");
 			UnverifiableCode = new PredefinedAttribute (module, "System.Security", "UnverifiableCodeAttribute");
-			HostProtection = new PredefinedAttribute (module, "System.Security.Permissions", "HostProtectionAttribute");
 
 			DefaultCharset = new PredefinedAttribute (module, "System.Runtime.InteropServices", "DefaultCharSetAttribute");
 			TypeForwarder = new PredefinedAttribute (module, "System.Runtime.CompilerServices", "TypeForwardedToAttribute");
@@ -1803,6 +1764,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			FieldOffset = new PredefinedAttribute (module, "System.Runtime.InteropServices", "FieldOffsetAttribute");
 			AssemblyProduct = new PredefinedAttribute (module, "System.Reflection", "AssemblyProductAttribute");
 			AssemblyCompany = new PredefinedAttribute (module, "System.Reflection", "AssemblyCompanyAttribute");
+			AssemblyDescription = new PredefinedAttribute (module, "System.Reflection", "AssemblyDescriptionAttribute");
 			AssemblyCopyright = new PredefinedAttribute (module, "System.Reflection", "AssemblyCopyrightAttribute");
 			AssemblyTrademark = new PredefinedAttribute (module, "System.Reflection", "AssemblyTrademarkAttribute");
 
@@ -1965,7 +1927,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				return;
 
 			MethodSpec ctor = null;
-			foreach (MethodSpec m in MemberCache.FindMembers (atype.TypeSpec, MonoCSharp.Constructor.ConstructorName, true)) {
+			foreach (MethodSpec m in MemberCache.FindMembers (atype.TypeSpec, CSharp.Constructor.ConstructorName, true)) {
 				if (m.Parameters.Count != 1)
 					continue;
 

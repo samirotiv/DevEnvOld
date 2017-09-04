@@ -63,13 +63,6 @@ namespace ICSharpCode.NRefactory.CSharp
 			}
 			if (expr is CastExpression)
 				return Unary;
-			if (expr is PrimitiveExpression) {
-				var value = ((PrimitiveExpression)expr).Value;
-				if (value is int && (int)value < 0)
-					return Unary;
-				if (value is long && (long)value < 0)
-					return Unary;
-			}
 			BinaryOperatorExpression boe = expr as BinaryOperatorExpression;
 			if (boe != null) {
 				switch (boe.Operator) {
@@ -174,10 +167,7 @@ namespace ICSharpCode.NRefactory.CSharp
 		
 		public override void VisitCastExpression(CastExpression castExpression)
 		{
-			// Even in readability mode, don't parenthesize casts of casts.
-			if (!(castExpression.Expression is CastExpression)) {
-				ParenthesizeIfRequired(castExpression.Expression, InsertParenthesesForReadability ? Primary : Unary);
-			}
+			ParenthesizeIfRequired(castExpression.Expression, InsertParenthesesForReadability ? Primary : Unary);
 			// There's a nasty issue in the C# grammar: cast expressions including certain operators are ambiguous in some cases
 			// "(int)-1" is fine, but "(A)-b" is not a cast.
 			UnaryOperatorExpression uoe = castExpression.Expression as UnaryOperatorExpression;
@@ -350,14 +340,6 @@ namespace ICSharpCode.NRefactory.CSharp
 					Parenthesize(queryExpression);
 			}
 			base.VisitQueryExpression(queryExpression);
-		}
-
-		public override void VisitNamedExpression (NamedExpression namedExpression)
-		{
-			if (InsertParenthesesForReadability) {
-				ParenthesizeIfRequired(namedExpression.Expression, RelationalAndTypeTesting + 1);
-			}
-			base.VisitNamedExpression (namedExpression);
 		}
 	}
 }

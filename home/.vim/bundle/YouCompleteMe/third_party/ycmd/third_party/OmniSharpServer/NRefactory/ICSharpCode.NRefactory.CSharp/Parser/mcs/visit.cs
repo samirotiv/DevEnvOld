@@ -13,7 +13,7 @@
 using System;
 using System.Diagnostics;
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	public abstract class StructuralVisitor
 	{
@@ -49,10 +49,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		}
 		
 		public virtual void Visit (UsingExternAlias uea)
-		{
-		}
-
-		public virtual void Visit (UsingClause usingClause)
 		{
 		}
 

@@ -1,11 +1,29 @@
 //
+// CodeReader.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
@@ -17,53 +35,58 @@ using RVA = System.UInt32;
 
 namespace Mono.Cecil.Cil {
 
-	sealed class CodeReader : BinaryStreamReader {
+	sealed class CodeReader : ByteBuffer {
 
 		readonly internal MetadataReader reader;
 
 		int start;
+		Section code_section;
 
 		MethodDefinition method;
 		MethodBody body;
 
 		int Offset {
-			get { return Position - start; }
+			get { return base.position - start; }
 		}
 
-		public CodeReader (MetadataReader reader)
-			: base (reader.image.Stream.value)
+		public CodeReader (Section section, MetadataReader reader)
+			: base (section.Data)
 		{
+			this.code_section = section;
 			this.reader = reader;
-		}
-
-		public int MoveTo (MethodDefinition method)
-		{
-			this.method = method;
-			this.reader.context = method;
-			var position = this.Position;
-			this.Position = (int) reader.image.ResolveVirtualAddress ((uint) method.RVA);
-			return position;
-		}
-
-		void MoveBackTo (int position)
-		{
-			this.reader.context = null;
-			this.Position = position;
 		}
 
 		public MethodBody ReadMethodBody (MethodDefinition method)
 		{
-			var position = MoveTo (method);
+			this.method = method;
 			this.body = new MethodBody (method);
+
+			reader.context = method;
 
 			ReadMethodBody ();
 
-			MoveBackTo (position);
 			return this.body;
+		}
+
+		public void MoveTo (int rva)
+		{
+			if (!IsInSection (rva)) {
+				code_section = reader.image.GetSectionAtVirtualAddress ((uint) rva);
+				Reset (code_section.Data);
+			}
+
+			base.position = rva - (int) code_section.VirtualAddress;
+		}
+
+		bool IsInSection (int rva)
+		{
+			return code_section.VirtualAddress <= rva && rva < code_section.VirtualAddress + code_section.SizeOfRawData;
 		}
 
 		void ReadMethodBody ()
 		{
+			MoveTo (method.RVA);
+
 			var flags = ReadByte ();
 			switch (flags & 0x3) {
 			case 0x2: // tiny
@@ -72,7 +95,7 @@ namespace Mono.Cecil.Cil {
 				ReadCode ();
 				break;
 			case 0x3: // fat
-				Advance (-1);
+				base.position--;
 				ReadFatMethod ();
 				break;
 			default:
@@ -81,104 +104,10 @@ namespace Mono.Cecil.Cil {
 
 			var symbol_reader = reader.module.symbol_reader;
 
-			if (symbol_reader != null && method.debug_info == null)
-				method.debug_info = symbol_reader.Read (method);
-
-			if (method.debug_info != null)
-				ReadDebugInfo ();
-		}
-
-		void ReadDebugInfo ()
-		{
-			if (method.debug_info.sequence_points != null)
-				ReadSequencePoints ();
-
-			if (method.debug_info.scope != null)
-				ReadScope (method.debug_info.scope);
-
-			if (method.custom_infos != null)
-				ReadCustomDebugInformations (method);
-		}
-
-		void ReadCustomDebugInformations (MethodDefinition method)
-		{
-			var custom_infos = method.custom_infos;
-
-			for (int i = 0; i < custom_infos.Count; i++) {
-				var state_machine_scope = custom_infos [i] as StateMachineScopeDebugInformation;
-				if (state_machine_scope != null)
-					ReadStateMachineScope (state_machine_scope);
-
-				var async_method = custom_infos [i] as AsyncMethodBodyDebugInformation;
-				if (async_method != null)
-					ReadAsyncMethodBody (async_method);
+			if (symbol_reader != null) {
+				var instructions = body.Instructions;
+				symbol_reader.Read (body, offset => GetInstruction (instructions, offset));
 			}
-		}
-
-		void ReadAsyncMethodBody (AsyncMethodBodyDebugInformation async_method)
-		{
-			if (async_method.catch_handler.Offset > -1)
-				async_method.catch_handler = new InstructionOffset (GetInstruction (async_method.catch_handler.Offset));
-
-			if (!async_method.yields.IsNullOrEmpty ())
-				for (int i = 0; i < async_method.yields.Count; i++)
-					async_method.yields [i] = new InstructionOffset (GetInstruction (async_method.yields [i].Offset));
-
-			if (!async_method.resumes.IsNullOrEmpty ())
-				for (int i = 0; i < async_method.resumes.Count; i++)
-					async_method.resumes [i] = new InstructionOffset (GetInstruction (async_method.resumes [i].Offset));
-		}
-
-		void ReadStateMachineScope (StateMachineScopeDebugInformation state_machine_scope)
-		{
-			state_machine_scope.start = new InstructionOffset (GetInstruction (state_machine_scope.start.Offset));
-
-			var end_instruction = GetInstruction (state_machine_scope.end.Offset);
-			state_machine_scope.end = end_instruction == null
-				? new InstructionOffset ()
-				: new InstructionOffset (end_instruction);
-		}
-
-		void ReadSequencePoints ()
-		{
-			var symbol = method.debug_info;
-
-			for (int i = 0; i < symbol.sequence_points.Count; i++) {
-				var sequence_point = symbol.sequence_points [i];
-				var instruction = GetInstruction (sequence_point.Offset);
-				if (instruction != null)
-					sequence_point.offset = new InstructionOffset (instruction);
-			}
-		}
-
-		void ReadScopes (Collection<ScopeDebugInformation> scopes)
-		{
-			for (int i = 0; i < scopes.Count; i++)
-				ReadScope (scopes [i]);
-		}
-
-		void ReadScope (ScopeDebugInformation scope)
-		{
-			var start_instruction = GetInstruction (scope.Start.Offset);
-			if (start_instruction != null)
-				    scope.Start = new InstructionOffset (start_instruction);
-
-			var end_instruction = GetInstruction (scope.End.Offset);
-			scope.End = end_instruction != null
-				? new InstructionOffset (end_instruction)
-				: new InstructionOffset ();
-
-			if (!scope.variables.IsNullOrEmpty ()) {
-				for (int i = 0; i < scope.variables.Count; i++) {
-					var variable_info = scope.variables [i];
-					var variable = GetVariable (variable_info.Index);
-					if (variable != null)
-						variable_info.index = new VariableIndex (variable);
-				}
-			}
-
-			if (!scope.scopes.IsNullOrEmpty ())
-				ReadScopes (scope.scopes);
 		}
 
 		void ReadFatMethod ()
@@ -209,17 +138,17 @@ namespace Mono.Cecil.Cil {
 
 		void ReadCode ()
 		{
-			start = Position;
+			start = position;
 			var code_size = body.code_size;
 
-			if (code_size < 0 || Length <= (uint) (code_size + Position))
+			if (code_size < 0 || buffer.Length <= (uint) (code_size + position))
 				code_size = 0;
 
 			var end = start + code_size;
-			var instructions = body.instructions = new InstructionCollection (method, (code_size + 1) / 2);
+			var instructions = body.instructions = new InstructionCollection ((code_size + 1) / 2);
 
-			while (Position < end) {
-				var offset = Position - start;
+			while (position < end) {
+				var offset = base.position - start;
 				var opcode = ReadOpCode ();
 				var current = new Instruction (offset, opcode);
 
@@ -394,7 +323,7 @@ namespace Mono.Cecil.Cil {
 
 		void ReadFatSection ()
 		{
-			Advance (-1);
+			position--;
 			var count = (ReadInt32 () >> 8) / 24;
 
 			ReadExceptionHandlers (
@@ -437,6 +366,12 @@ namespace Mono.Cecil.Cil {
 			}
 		}
 
+		void Align (int align)
+		{
+			align--;
+			Advance (((position + align) & ~align) - position);
+		}
+
 		public MetadataToken ReadToken ()
 		{
 			return new MetadataToken (ReadUInt32 ());
@@ -444,55 +379,76 @@ namespace Mono.Cecil.Cil {
 
 #if !READ_ONLY
 
-		public ByteBuffer PatchRawMethodBody (MethodDefinition method, CodeWriter writer, out int code_size, out MetadataToken local_var_token)
+		public ByteBuffer PatchRawMethodBody (MethodDefinition method, CodeWriter writer, out MethodSymbols symbols)
 		{
-			var position = MoveTo (method);
-
 			var buffer = new ByteBuffer ();
+			symbols = new MethodSymbols (method.Name);
+
+			this.method = method;
+			reader.context = method;
+
+			MoveTo (method.RVA);
 
 			var flags = ReadByte ();
+
+			MetadataToken local_var_token;
 
 			switch (flags & 0x3) {
 			case 0x2: // tiny
 				buffer.WriteByte (flags);
 				local_var_token = MetadataToken.Zero;
-				code_size = flags >> 2;
-				PatchRawCode (buffer, code_size, writer);
+				symbols.code_size = flags >> 2;
+				PatchRawCode (buffer, symbols.code_size, writer);
 				break;
 			case 0x3: // fat
-				Advance (-1);
-				PatchRawFatMethod (buffer, writer, out code_size, out local_var_token);
+				base.position--;
+
+				PatchRawFatMethod (buffer, symbols, writer, out local_var_token);
 				break;
 			default:
 				throw new NotSupportedException ();
 			}
 
-			MoveBackTo (position);
+			var symbol_reader = reader.module.symbol_reader;
+			if (symbol_reader != null && writer.metadata.write_symbols) {
+				symbols.method_token = GetOriginalToken (writer.metadata, method);
+				symbols.local_var_token = local_var_token;
+				symbol_reader.Read (symbols);
+			}
 
 			return buffer;
 		}
 
-		void PatchRawFatMethod (ByteBuffer buffer, CodeWriter writer, out int code_size, out MetadataToken local_var_token)
+		void PatchRawFatMethod (ByteBuffer buffer, MethodSymbols symbols, CodeWriter writer, out MetadataToken local_var_token)
 		{
 			var flags = ReadUInt16 ();
 			buffer.WriteUInt16 (flags);
 			buffer.WriteUInt16 (ReadUInt16 ());
-			code_size = ReadInt32 ();
-			buffer.WriteInt32 (code_size);
+			symbols.code_size = ReadInt32 ();
+			buffer.WriteInt32 (symbols.code_size);
 			local_var_token = ReadToken ();
 
 			if (local_var_token.RID > 0) {
-				var variables = ReadVariables (local_var_token);
+				var variables = symbols.variables = ReadVariables (local_var_token);
 				buffer.WriteUInt32 (variables != null
-					? writer.GetStandAloneSignature (variables).ToUInt32 ()
+					? writer.GetStandAloneSignature (symbols.variables).ToUInt32 ()
 					: 0);
 			} else
 				buffer.WriteUInt32 (0);
 
-			PatchRawCode (buffer, code_size, writer);
+			PatchRawCode (buffer, symbols.code_size, writer);
 
 			if ((flags & 0x8) != 0)
 				PatchRawSection (buffer, writer.metadata);
+		}
+
+		static MetadataToken GetOriginalToken (MetadataBuilder metadata, MethodDefinition method)
+		{
+			MetadataToken original;
+			if (metadata.TryGetOriginalMethodToken (method.token, out original))
+				return original;
+
+			return MetadataToken.Zero;
 		}
 
 		void PatchRawCode (ByteBuffer buffer, int code_size, CodeWriter writer)
@@ -563,9 +519,9 @@ namespace Mono.Cecil.Cil {
 
 		void PatchRawSection (ByteBuffer buffer, MetadataBuilder metadata)
 		{
-			var position = Position;
+			var position = base.position;
 			Align (4);
-			buffer.WriteBytes (Position - position);
+			buffer.WriteBytes (base.position - position);
 
 			const byte fat_format = 0x40;
 			const byte more_sects = 0x80;
@@ -596,7 +552,7 @@ namespace Mono.Cecil.Cil {
 
 		void PatchRawFatSection (ByteBuffer buffer, MetadataBuilder metadata)
 		{
-			Advance (-1);
+			position--;
 			var length = ReadInt32 ();
 			buffer.WriteInt32 (length);
 

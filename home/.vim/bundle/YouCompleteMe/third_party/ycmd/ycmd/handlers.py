@@ -20,7 +20,8 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 import bottle
@@ -121,7 +122,7 @@ def GetCompletions():
 
   return _JsonResponse(
       BuildCompletionResponse( completions if completions else [],
-                               request_data[ 'start_column' ],
+                               request_data.CompletionStartColumn(),
                                errors = errors ) )
 
 
@@ -141,10 +142,9 @@ def FilterAndSortCandidates():
 @app.get( '/healthy' )
 def GetHealthy():
   _logger.info( 'Received health request' )
-  if request.query.subserver:
-    filetype = request.query.subserver
-    completer = _server_state.GetFiletypeCompleter( [ filetype ] )
-    return _JsonResponse( completer.ServerIsHealthy() )
+  if request.query.include_subservers:
+    cs_completer = _server_state.GetFiletypeCompleter( ['cs'] )
+    return _JsonResponse( cs_completer.ServerIsHealthy() )
   return _JsonResponse( True )
 
 
@@ -153,9 +153,15 @@ def GetReady():
   _logger.info( 'Received ready request' )
   if request.query.subserver:
     filetype = request.query.subserver
-    completer = _server_state.GetFiletypeCompleter( [ filetype ] )
-    return _JsonResponse( completer.ServerIsReady() )
+    return _JsonResponse( _IsSubserverReady( filetype ) )
+  if request.query.include_subservers:
+    return _JsonResponse( _IsSubserverReady( 'cs' ) )
   return _JsonResponse( True )
+
+
+def _IsSubserverReady( filetype ):
+  completer = _server_state.GetFiletypeCompleter( [filetype] )
+  return completer.ServerIsReady()
 
 
 @app.post( '/semantic_completion_available' )

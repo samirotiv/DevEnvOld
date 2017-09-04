@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with ycmd.  If not, see <http://www.gnu.org/licenses/>.
 
+#include "standard.h"
 #include "ClangHelpers.h"
 #include "ClangUtils.h"
 #include "Utils.h"
@@ -52,7 +53,7 @@ FixIt BuildFixIt( const std::string& text,
                   CXDiagnostic diagnostic ) {
   FixIt fixit;
 
-  size_t num_chunks = clang_getDiagnosticNumFixIts( diagnostic );
+  uint num_chunks = clang_getDiagnosticNumFixIts( diagnostic );
   if ( !num_chunks )
     return fixit;
 
@@ -60,7 +61,7 @@ FixIt BuildFixIt( const std::string& text,
   fixit.location = Location( clang_getDiagnosticLocation( diagnostic ) );
   fixit.text = text;
 
-  for ( size_t idx = 0; idx < num_chunks; ++idx ) {
+  for ( uint idx = 0; idx < num_chunks; ++idx ) {
     FixItChunk chunk;
     CXSourceRange sourceRange;
     chunk.replacement_text = CXStringToString(
@@ -106,12 +107,12 @@ void BuildFullDiagnosticDataFromChildren(
   if ( !diag_set )
     return;
 
-  size_t num_child_diagnostics = clang_getNumDiagnosticsInSet( diag_set );
+  uint num_child_diagnostics = clang_getNumDiagnosticsInSet( diag_set );
 
   if ( !num_child_diagnostics )
     return;
 
-  for ( size_t i = 0; i < num_child_diagnostics; ++i ) {
+  for ( uint i = 0; i < num_child_diagnostics; ++i ) {
     CXDiagnostic child_diag = clang_getDiagnosticInSet( diag_set, i );
 
     if( !child_diag )
@@ -140,10 +141,10 @@ bool CompletionStringAvailable( CXCompletionString completion_string ) {
 
 std::vector< Range > GetRanges( const DiagnosticWrap &diagnostic_wrap ) {
   std::vector< Range > ranges;
-  size_t num_ranges = clang_getDiagnosticNumRanges( diagnostic_wrap.get() );
+  uint num_ranges = clang_getDiagnosticNumRanges( diagnostic_wrap.get() );
   ranges.reserve( num_ranges );
 
-  for ( size_t i = 0; i < num_ranges; ++i ) {
+  for ( uint i = 0; i < num_ranges; ++i ) {
     ranges.push_back(
       Range( clang_getDiagnosticRange( diagnostic_wrap.get(), i ) ) );
   }
@@ -164,13 +165,13 @@ Range GetLocationExtent( CXSourceLocation source_location,
   CXSourceRange range = clang_getCursorExtent(
                           clang_getCursor( translation_unit, source_location ) );
   CXToken *tokens;
-  unsigned int num_tokens;
+  uint num_tokens;
   clang_tokenize( translation_unit, range, &tokens, &num_tokens );
 
   Location location( source_location );
   Range final_range;
 
-  for ( size_t i = 0; i < num_tokens; ++i ) {
+  for ( uint i = 0; i < num_tokens; ++i ) {
     Location token_location( clang_getTokenLocation( translation_unit,
                                                      tokens[ i ] ) );
 
@@ -195,7 +196,7 @@ std::vector< CXUnsavedFile > ToCXUnsavedFiles(
   const std::vector< UnsavedFile > &unsaved_files ) {
   std::vector< CXUnsavedFile > clang_unsaved_files( unsaved_files.size() );
 
-  for ( size_t i = 0; i < unsaved_files.size(); ++i ) {
+  for ( uint i = 0; i < unsaved_files.size(); ++i ) {
     clang_unsaved_files[ i ].Filename = unsaved_files[ i ].filename_.c_str();
     clang_unsaved_files[ i ].Contents = unsaved_files[ i ].contents_.c_str();
     clang_unsaved_files[ i ].Length   = unsaved_files[ i ].length_;
@@ -213,16 +214,16 @@ std::vector< CompletionData > ToCompletionDataVector(
     return completions;
 
   completions.reserve( results->NumResults );
-  unordered_map< std::string, size_t > seen_data;
+  unordered_map< std::string, uint > seen_data;
 
-  for ( size_t i = 0; i < results->NumResults; ++i ) {
+  for ( uint i = 0; i < results->NumResults; ++i ) {
     CXCompletionResult completion_result = results->Results[ i ];
 
     if ( !CompletionStringAvailable( completion_result.CompletionString ) )
       continue;
 
     CompletionData data( completion_result );
-    size_t index = GetValueElseInsert( seen_data,
+    uint index = GetValueElseInsert( seen_data,
                                      data.original_string_,
                                      completions.size() );
 

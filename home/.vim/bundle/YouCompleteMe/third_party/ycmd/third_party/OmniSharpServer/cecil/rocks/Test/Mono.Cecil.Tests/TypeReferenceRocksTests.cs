@@ -1,4 +1,3 @@
-#if !READ_ONLY
 using System;
 
 using Mono.Cecil.Rocks;
@@ -119,8 +118,7 @@ namespace Mono.Cecil.Tests {
 
 		static TypeReference GetTypeReference (Type type)
 		{
-			return ModuleDefinition.ReadModule (typeof (TypeReferenceRocksTests).Module.FullyQualifiedName).ImportReference (type);
+			return ModuleDefinition.ReadModule (typeof (TypeReferenceRocksTests).Module.FullyQualifiedName).Import (type);
 		}
 	}
 }
-#endif

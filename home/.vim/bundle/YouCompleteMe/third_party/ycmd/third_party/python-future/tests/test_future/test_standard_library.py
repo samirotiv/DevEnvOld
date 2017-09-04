@@ -134,7 +134,7 @@ class TestStandardLibraryReorganization(CodeHandler):
 
         # Imports should succeed again now:
         import builtins
-        import html
+        import configparser
         if utils.PY2:
             self.assertTrue(standard_library.detect_hooks())
             self.assertTrue(len(old_meta_path) == len(sys.meta_path))
@@ -271,9 +271,8 @@ class TestStandardLibraryReorganization(CodeHandler):
         with self.assertRaises(CalledProcessError):
             output = self._run_test_script('importme1.py')
 
-    # Disabled since v0.16.0:
-    # def test_configparser(self):
-    #     import configparser
+    def test_configparser(self):
+        import configparser
     
     def test_copyreg(self):
         import copyreg

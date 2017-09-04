@@ -516,8 +516,10 @@ namespace ICSharpCode.NRefactory.CSharp
 			var parent = Parent as BracesBodyState;
 			if (parent == null || parent.LastBlockIndent == null || !Engine.EnableCustomIndentLevels)
 			{
-				NextLineIndent.RemoveAlignment();
-				NextLineIndent.PopIf(IndentType.Continuation);
+				if (!Engine.formattingOptions.IndentBlocksInsideExpressions) {
+					NextLineIndent.RemoveAlignment();
+					NextLineIndent.PopIf(IndentType.Continuation);
+				}
 			}
 			else
 			{
@@ -543,7 +545,7 @@ namespace ICSharpCode.NRefactory.CSharp
 
 		public override void OnExit()
 		{
-			if (Parent is BracesBodyState && !((BracesBodyState)Parent).IsRightHandExpression)
+			if (Parent is BracesBodyState)
 			{
 				((BracesBodyState)Parent).OnStatementExit();
 			}
@@ -876,16 +878,8 @@ namespace ICSharpCode.NRefactory.CSharp
 		/// </summary>
 		void AddIndentation(Body body)
 		{
-			var isExpression = Parent is ParenthesesBodyState || Parent is SquareBracketsBodyState ||
-				(Parent is BracesBodyState && ((BracesBodyState)Parent).IsRightHandExpression);
-			if (isExpression && Engine.formattingOptions.IndentBlocksInsideExpressions && Engine.isLineStart)
-			{
-				AddIndentation(BraceStyle.NextLineShifted);
-			}
-
 			BraceStyle style;
-			if (TryGetBraceStyle(body, out style))
-			{
+			if (TryGetBraceStyle (body, out style)) {
 				AddIndentation(style);
 			} else {
 				NextLineIndent.Push(IndentType.Empty);
@@ -1303,7 +1297,6 @@ namespace ICSharpCode.NRefactory.CSharp
 						{
 							if (!Engine.ifDirectiveEvalResults.Peek())
 							{
-								ExitState();
 								Engine.ifDirectiveEvalResults.Pop();
 								goto case PreProcessorDirective.If;
 							}
@@ -1320,9 +1313,7 @@ namespace ICSharpCode.NRefactory.CSharp
 						}
 						else
 						{
-							// none if/elif directives were true -> exit comment state.
-							if (Engine.currentState is PreProcessorCommentState)
-								ExitState();
+							// none if/elif directives were true -> continue with the previous state
 						}
 						break;
 					case PreProcessorDirective.Define:
@@ -1341,9 +1332,6 @@ namespace ICSharpCode.NRefactory.CSharp
 						break;
 					case PreProcessorDirective.Endif:
 						// marks the end of this block
-						if (Engine.currentState is PreProcessorCommentState)
-							ExitState();
-
 						Engine.ifDirectiveEvalResults.Pop();
 						Engine.ifDirectiveIndents.Pop();
 						break;
@@ -1692,6 +1680,9 @@ namespace ICSharpCode.NRefactory.CSharp
 
 			if (ch == '#' && Engine.isLineStart)
 			{
+				// TODO: Return back only on #if/#elif/#else/#endif
+				// Ignore any of the other directives (especially #define/#undef)
+				ExitState();
 				ChangeState<PreProcessorState>();
 			}
 		}

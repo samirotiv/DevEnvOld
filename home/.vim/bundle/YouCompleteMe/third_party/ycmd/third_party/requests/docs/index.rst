@@ -8,34 +8,19 @@ Requests: HTTP for Humans
 
 Release v\ |version|. (:ref:`Installation <install>`)
 
-.. image:: https://img.shields.io/pypi/l/requests.svg
-    :target: https://pypi.python.org/pypi/requests
+Requests is an :ref:`Apache2 Licensed <apache2>` HTTP library, written in
+Python, for human beings.
 
-.. image:: https://img.shields.io/pypi/wheel/requests.svg
-    :target: https://pypi.python.org/pypi/requests
+Python's standard **urllib2** module provides most of
+the HTTP capabilities you need, but the API is thoroughly **broken**.
+It was built for a different time — and a different web. It requires an
+*enormous* amount of work (even method overrides) to perform the simplest of
+tasks.
 
-.. image:: https://img.shields.io/pypi/pyversions/requests.svg
-    :target: https://pypi.python.org/pypi/requests
+Things shouldn’t be this way. Not in Python.
 
-.. image:: https://codecov.io/github/requests/requests/coverage.svg?branch=master
-    :target: https://codecov.io/github/requests/requests
-    :alt: codecov.io
+::
 
-.. image:: https://img.shields.io/badge/Say%20Thanks!-🦉-1EAEDB.svg
-    :target: https://saythanks.io/to/kennethreitz
-
-
-**Requests** is the only *Non-GMO* HTTP library for Python, safe for human
-consumption.
-
-.. note:: The use of **Python 3** is *highly* preferred over Python 2. Consider upgrading your applications and infrastructure if you find yourself *still* using Python 2 in production today. If you are using Python 3, congratulations — you are indeed a person of excellent taste.
-  —*Kenneth Reitz*
-
--------------------
-
-**Behold, the power of Requests**::
-
-    >>> import requests
     >>> r = requests.get('https://api.github.com/user', auth=('user', 'pass'))
     >>> r.status_code
     200
@@ -48,67 +33,62 @@ consumption.
     >>> r.json()
     {u'private_gists': 419, u'total_private_repos': 77, ...}
 
-See `similar code, sans Requests <https://gist.github.com/973705>`_.
+See `similar code, without Requests <https://gist.github.com/973705>`_.
+
+Requests takes all of the work out of Python HTTP/1.1 — making your integration
+with web services seamless. There's no need to manually add query strings to
+your URLs, or to form-encode your POST data. Keep-alive and HTTP connection
+pooling are 100%  automatic, powered by `urllib3 <https://github.com/shazow/urllib3>`_,
+which is embedded within Requests.
 
 
-**Requests** allows you to send *organic, grass-fed* HTTP/1.1 requests, without the
-need for manual labor. There's no need to manually add query strings to your
-URLs, or to form-encode your POST data. Keep-alive and HTTP connection pooling
-are 100% automatic, thanks to `urllib3 <https://github.com/shazow/urllib3>`_.
+Testimonials
+------------
 
-User Testimonials
------------------
-
-Twitter, Spotify, Microsoft, Amazon, Lyft, BuzzFeed, Reddit, The NSA, Her Majesty's Government, Google, Twilio, Runscope, Mozilla, Heroku,
+Her Majesty's Government, Amazon, Google, Twilio, Runscope, Mozilla, Heroku,
 PayPal, NPR, Obama for America, Transifex, Native Instruments, The Washington
-Post, SoundCloud, Kippt, Sony, and Federal U.S.
-Institutions that prefer to be unnamed claim to use Requests internally.
+Post, Twitter, SoundCloud, Kippt, Readability, Sony, and Federal US Institutions that prefer to be unnamed
+use Requests internally. It has been downloaded over 60,000,000 times from PyPI.
 
-**Armin Ronacher**—
-    *Requests is the perfect example how beautiful an API can be with the
-    right level of abstraction.*
+**Armin Ronacher**
+    Requests is the perfect example how beautiful an API can be with the
+    right level of abstraction.
 
-**Matt DeBoard**—
-    *I'm going to get Kenneth Reitz's Python requests module tattooed
-    on my body, somehow. The whole thing.*
+**Matt DeBoard**
+    I'm going to get @kennethreitz's Python requests module tattooed
+    on my body, somehow. The whole thing.
 
-**Daniel Greenfeld**—
-    *Nuked a 1200 LOC spaghetti code library with 10 lines of code thanks to
-    Kenneth Reitz's request library. Today has been AWESOME.*
+**Daniel Greenfeld**
+    Nuked a 1200 LOC spaghetti code library with 10 lines of code thanks to
+    @kennethreitz's request library. Today has been AWESOME.
 
-**Kenny Meyers**—
-    *Python HTTP: When in doubt, or when not in doubt, use Requests. Beautiful,
-    simple, Pythonic.*
+**Kenny Meyers**
+    Python HTTP: When in doubt, or when not in doubt, use Requests. Beautiful,
+    simple, Pythonic.
 
-Requests is one of the most downloaded Python packages of all time, pulling in
-over 13,000,000 downloads every month. All the cool kids are doing it!
 
-Beloved Features
-----------------
+Feature Support
+---------------
 
 Requests is ready for today's web.
 
-- Keep-Alive & Connection Pooling
 - International Domains and URLs
+- Keep-Alive & Connection Pooling
 - Sessions with Cookie Persistence
 - Browser-style SSL Verification
-- Automatic Content Decoding
 - Basic/Digest Authentication
 - Elegant Key/Value Cookies
 - Automatic Decompression
 - Unicode Response Bodies
-- HTTP(S) Proxy Support
 - Multipart File Uploads
-- Streaming Downloads
 - Connection Timeouts
-- Chunked Requests
-- ``.netrc`` Support
+- ``.netrc`` support
+- Python 2.6—3.4
+- Thread-safe.
 
-Requests officially supports Python 2.6–2.7 & 3.4–3.7, and runs great on PyPy.
 
-
-The User Guide
---------------
+User Guide
+----------
 
 This part of the documentation, which is mostly prose, begins with some
 background information about Requests, then focuses on step-by-step
@@ -124,8 +104,8 @@ instructions for getting the most out of Requests.
    user/authentication
 
 
-The Community Guide
--------------------
+Community Guide
+-----------------
 
 This part of the documentation, which is mostly prose, details the
 Requests ecosystem and community.
@@ -141,10 +121,10 @@ Requests ecosystem and community.
    community/updates
    community/release-process
 
-The API Documentation / Guide
------------------------------
+API Documentation
+-----------------
 
-If you are looking for information on a specific function, class, or method,
+If you are looking for information on a specific function, class or method,
 this part of the documentation is for you.
 
 .. toctree::
@@ -153,19 +133,16 @@ this part of the documentation is for you.
    api
 
 
-The Contributor Guide
----------------------
+Contributor Guide
+-----------------
 
 If you want to contribute to the project, this part of the documentation is for
 you.
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 1
 
    dev/contributing
    dev/philosophy
    dev/todo
    dev/authors
-
-There are no more guides. You are now guideless.
-Good luck.

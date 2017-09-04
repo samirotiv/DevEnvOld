@@ -30,7 +30,7 @@ using ICSharpCode.NRefactory.CSharp.Resolver;
 using ICSharpCode.NRefactory.CSharp.TypeSystem;
 using ICSharpCode.NRefactory.TypeSystem;
 using System.Threading;
-using ICSharpCode.NRefactory.MonoCSharp;
+using Mono.CSharp;
 using System.IO;
 using ICSharpCode.NRefactory.Editor;
 

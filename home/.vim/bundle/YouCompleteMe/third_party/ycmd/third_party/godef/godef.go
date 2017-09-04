@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,11 +15,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rogpeppe/godef/go/ast"
-	"github.com/rogpeppe/godef/go/parser"
-	"github.com/rogpeppe/godef/go/printer"
-	"github.com/rogpeppe/godef/go/token"
-	"github.com/rogpeppe/godef/go/types"
+	"./go_local/ast"
+	"./go_local/parser"
+	"./go_local/printer"
+	"./go_local/token"
+	"./go_local/types"
 )
 
 var readStdin = flag.Bool("i", false, "read file from stdin")
@@ -28,7 +29,7 @@ var tflag = flag.Bool("t", false, "print type information")
 var aflag = flag.Bool("a", false, "print public type and member information")
 var Aflag = flag.Bool("A", false, "print all type and members information")
 var fflag = flag.String("f", "", "Go source filename")
-var acmeFlag = flag.Bool("acme", false, "use current acme window")
+var jsonFlag = flag.Bool("json", false, "output stuff in JSON")
 
 func fail(s string, a ...interface{}) {
 	fmt.Fprint(os.Stderr, "godef: "+fmt.Sprintf(s, a...)+"\n")
@@ -67,15 +68,8 @@ func main() {
 	searchpos := *offset
 	filename := *fflag
 
-	var afile *acmeFile
 	var src []byte
-	if *acmeFlag {
-		var err error
-		if afile, err = acmeCurrentFile(); err != nil {
-			fail("%v", err)
-		}
-		filename, src, searchpos = afile.name, afile.body, afile.offset
-	} else if *readStdin {
+	if *readStdin {
 		src, _ = ioutil.ReadAll(os.Stdin)
 	} else {
 		// TODO if there's no filename, look in the current
@@ -104,10 +98,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "no expression or offset specified\n")
 		flag.Usage()
 		os.Exit(2)
-	}
-	// print old source location to facilitate backtracking
-	if *acmeFlag {
-		fmt.Printf("\t%s:#%d\n", afile.name, afile.runeOffset)
 	}
 	switch e := o.(type) {
 	case *ast.ImportSpec:
@@ -225,7 +215,23 @@ func (o orderedObjects) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
 func done(obj *ast.Object, typ types.Type) {
 	defer os.Exit(0)
 	pos := types.FileSet.Position(types.DeclPos(obj))
-	fmt.Printf("%v\n", pos)
+	if *jsonFlag {
+		jsonMap := make(map[string]string)
+		if pos.Filename != "" {
+			jsonMap["filename"] = pos.Filename
+			if pos.IsValid() {
+				jsonMap["line"] = strconv.Itoa(pos.Line)
+				jsonMap["column"] = strconv.Itoa(pos.Column)
+			}
+		}
+		jsonStr, err := json.Marshal(jsonMap)
+		if err != nil {
+			fmt.Printf("{}\n")
+		}
+		fmt.Printf("%s\n", jsonStr)
+	} else {
+		fmt.Printf("%v\n", pos)
+	}
 	if typ.Kind == ast.Bad || !*tflag {
 		return
 	}

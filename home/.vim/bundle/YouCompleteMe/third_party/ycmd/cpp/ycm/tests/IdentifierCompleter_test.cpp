@@ -28,19 +28,12 @@ using ::testing::WhenSorted;
 namespace YouCompleteMe {
 
 
-TEST( IdentifierCompleterTest, SortOnEmptyQuery ) {
+// This differs from what we expect from the ClangCompleter. That one should
+// return results for an empty query.
+TEST( IdentifierCompleterTest, EmptyQueryNoResults ) {
   EXPECT_THAT( IdentifierCompleter(
                  StringVector(
-                   "foo",
-                   "bar" ) ).CandidatesForQuery( "" ),
-               ElementsAre( "bar",
-                            "foo" ) );
-}
-
-TEST( IdentifierCompleterTest, IgnoreEmptyCandidate ) {
-  EXPECT_THAT( IdentifierCompleter(
-                 StringVector(
-                   "" ) ).CandidatesForQuery( "" ),
+                   "foobar" ) ).CandidatesForQuery( "" ),
                IsEmpty() );
 }
 
@@ -305,34 +298,7 @@ TEST( IdentifierCompleterTest, TagsEndToEndWorks ) {
 
 }
 
-
-// Filetype checking
-TEST( IdentifierCompleterTest, ManyCandidateSimpleFileType ) {
-  IdentifierCompleter completer;
-  EXPECT_THAT( IdentifierCompleter(
-                 StringVector(
-                   "foobar",
-                   "foobartest",
-                   "Foobartest" ),
-                 std::string( "c" ),
-                 std::string( "foo" ) ).CandidatesForQueryAndType( "fbr", "c" ),
-               WhenSorted( ElementsAre( "Foobartest",
-                                        "foobar",
-                                        "foobartest" ) ) );
-}
-
-
-TEST( IdentifierCompleterTest, ManyCandidateSimpleWrongFileType ) {
-  IdentifierCompleter completer;
-  EXPECT_THAT( IdentifierCompleter(
-                 StringVector(
-                   "foobar",
-                   "foobartest",
-                   "Foobartest" ),
-                 std::string( "c" ),
-                 std::string( "foo" ) ).CandidatesForQueryAndType( "fbr", "cpp" ),
-               IsEmpty() );
-}
+// TODO: tests for filepath and filetype candidate storing
 
 } // namespace YouCompleteMe
 

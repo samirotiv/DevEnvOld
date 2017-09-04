@@ -18,8 +18,6 @@
 #ifndef PYTHONSUPPORT_H_KWGFEX0V
 #define PYTHONSUPPORT_H_KWGFEX0V
 
-#include "DLLDefines.h"
-
 #include <boost/python.hpp>
 
 namespace YouCompleteMe {
@@ -28,15 +26,15 @@ namespace YouCompleteMe {
 /// python list |candidates|, a |candidate_property| on which to filter and sort
 /// the candidates and a user query, returns a new sorted python list with the
 /// original objects that survived the filtering.
-YCM_DLL_EXPORT boost::python::list FilterAndSortCandidates(
+boost::python::list FilterAndSortCandidates(
   const boost::python::list &candidates,
   const std::string &candidate_property,
   const std::string &query );
 
 /// Given a Python object that's supposed to be "string-like", returns a UTF-8
-/// encoded std::string. Raises an exception if the object can't be converted to
-/// a string. Supports newstr and newbytes from python-future on Python 2.
-std::string GetUtf8String( const boost::python::object &value );
+/// encoded std::string. If the object can't be converted to a string, returns an
+/// empty one.
+std::string GetUtf8String( const boost::python::object &string_or_unicode );
 
 } // namespace YouCompleteMe
 

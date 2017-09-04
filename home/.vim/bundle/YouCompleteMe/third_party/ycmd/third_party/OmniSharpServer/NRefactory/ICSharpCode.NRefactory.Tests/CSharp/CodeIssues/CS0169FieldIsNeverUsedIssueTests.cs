@@ -110,18 +110,6 @@ namespace ICSharpCode.NRefactory.CSharp.CodeIssues
 	}
 }");
 		}
-
-		[Test]
-		public void TestPartial ()
-		{
-			TestWrongContext<CS0169FieldIsNeverUsedIssue>(@"partial class Test
-{
-	object fooBar;
-}");
-		}
-
-
-
 	}
 }
 

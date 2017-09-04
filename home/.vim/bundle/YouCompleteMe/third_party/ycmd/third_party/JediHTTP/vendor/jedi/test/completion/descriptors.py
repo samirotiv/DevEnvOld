@@ -140,8 +140,6 @@ class E(object):
     def f(x):
         return x
     f = staticmethod(f)
-    #?
-    f.__func
 
     @staticmethod
     def g(x):

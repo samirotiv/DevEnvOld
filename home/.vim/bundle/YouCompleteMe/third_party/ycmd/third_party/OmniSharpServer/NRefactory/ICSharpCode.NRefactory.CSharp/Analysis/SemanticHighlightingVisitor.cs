@@ -89,7 +89,7 @@ namespace ICSharpCode.NRefactory.CSharp.Analysis
 		protected TextLocation regionEnd;
 		
 		protected CSharpAstResolver resolver;
-		protected bool isInAccessorContainingValueParameter;
+		bool isInAccessorContainingValueParameter;
 		
 		protected abstract void Colorize(TextLocation start, TextLocation end, TColor color);
 		
@@ -292,11 +292,17 @@ namespace ICSharpCode.NRefactory.CSharp.Analysis
 					}
 					start = new TextLocation(line, col);
 				}
+				col++;
 				if (ch == '}' &&!start.IsEmpty) {
-					Colorize(start, new TextLocation(line, col + 1), stringFormatItemColor);
+					char next = i + 1 < expr.LiteralValue.Length ? expr.LiteralValue [i + 1] : '\0';
+					if (next == '}') {
+						i++;
+						col += 2;
+						continue;
+					}
+					Colorize(start, new TextLocation(line, col), stringFormatItemColor);
 					start = TextLocation.Empty;
 				}
-				col++;
 			}
 
 		}
@@ -535,8 +541,7 @@ namespace ICSharpCode.NRefactory.CSharp.Analysis
 					return true;
 				case SymbolKind.Constructor:
 				case SymbolKind.Destructor:
-					var declaringType = member.DeclaringType;
-					return TryGetTypeHighlighting (declaringType != null ? declaringType.Kind : TypeKind.Unknown, out color);
+					return TryGetTypeHighlighting (member.DeclaringType.Kind, out color);
 				default:
 					color = default (TColor);
 					return false;

@@ -43,8 +43,6 @@
 
 #include "vim.h"
 
-#if defined(FEAT_GUI) || defined(FEAT_JOB_CHANNEL)
-
 #include <signal.h>
 
 #ifdef __CYGWIN32__
@@ -416,5 +414,3 @@ OpenPTY(char **ttyn)
     return -1;
 }
 #endif
-
-#endif /* FEAT_GUI || FEAT_TERMINAL */

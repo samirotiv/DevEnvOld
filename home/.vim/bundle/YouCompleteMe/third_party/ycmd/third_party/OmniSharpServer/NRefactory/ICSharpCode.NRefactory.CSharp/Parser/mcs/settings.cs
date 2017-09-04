@@ -19,7 +19,7 @@ using System.Text;
 using System.Globalization;
 using System;
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	public enum LanguageVersion
 	{
@@ -28,10 +28,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		V_3 = 3,
 		V_4 = 4,
 		V_5 = 5,
-		V_6 = 6,
-		Experimental = 100,
+		Future = 100,
 
-		Default = LanguageVersion.V_6,
+		Default = LanguageVersion.V_5,
 	}
 
 	public enum RuntimeVersion
@@ -1137,13 +1136,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 				switch (value.ToLowerInvariant ()) {
 				case "iso-1":
-				case "1":
 					settings.Version = LanguageVersion.ISO_1;
 					return ParseResult.Success;
 				case "default":
 					settings.Version = LanguageVersion.Default;
 					return ParseResult.Success;
-				case "2":
 				case "iso-2":
 					settings.Version = LanguageVersion.ISO_2;
 					return ParseResult.Success;
@@ -1156,18 +1153,12 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				case "5":
 					settings.Version = LanguageVersion.V_5;
 					return ParseResult.Success;
-				case "6":
-					settings.Version = LanguageVersion.V_6;
-					return ParseResult.Success;
-				case "experimental":
-					settings.Version = LanguageVersion.Experimental;
-					return ParseResult.Success;
 				case "future":
-					report.Warning (8000, 1, "Language version `future' is no longer supported");
-					goto case "6";
+					settings.Version = LanguageVersion.Future;
+					return ParseResult.Success;
 				}
 
-				report.Error (1617, "Invalid -langversion option `{0}'. It must be `ISO-1', `ISO-2', Default or value in range 1 to 6", value);
+				report.Error (1617, "Invalid -langversion option `{0}'. It must be `ISO-1', `ISO-2', `3', `4', `5', `Default' or `Future'", value);
 				return ParseResult.Error;
 
 			case "/codepage":

@@ -19,11 +19,11 @@
 #define LETTERNODELISTMAP_H_BRK2UMC1
 
 #include "DLLDefines.h"
-#include "Utils.h"
 
 #include <vector>
 #include <memory>
-#include <array>
+#include <boost/utility.hpp>
+#include <boost/array.hpp>
 
 #define NUM_LETTERS 128
 
@@ -31,6 +31,8 @@ namespace YouCompleteMe {
 
 class LetterNode;
 
+YCM_DLL_EXPORT bool IsUppercase( char letter );
+bool IsInAsciiRange( int index );
 YCM_DLL_EXPORT int IndexForLetter( char letter );
 
 /*
@@ -70,7 +72,7 @@ public:
   YCM_DLL_EXPORT NearestLetterNodeIndices *ListPointerAt( char letter );
 
 private:
-  typedef std::array<NearestLetterNodeIndices , NUM_LETTERS>
+  typedef boost::array<NearestLetterNodeIndices , NUM_LETTERS>
     NearestLetterNodeArray;
 
   std::unique_ptr< NearestLetterNodeArray > letters_;

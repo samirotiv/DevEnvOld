@@ -22,7 +22,7 @@ using System.Globalization;
 using System.Diagnostics;
 using System.Threading;
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	/// <summary>
 	///    The compiler driver.

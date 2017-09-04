@@ -304,15 +304,3 @@ class A():
 
 #? int()
 A().ret()
-
-
-# -----------------
-# On decorator completions
-# -----------------
-
-import abc
-#? ['abc']
-@abc
-
-#? ['abstractmethod']
-@abc.abstractmethod

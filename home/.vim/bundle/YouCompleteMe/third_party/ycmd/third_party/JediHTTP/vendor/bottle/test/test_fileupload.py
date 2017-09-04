@@ -4,7 +4,7 @@
 import unittest
 import sys, os.path
 import bottle
-from bottle import FileUpload, BytesIO, tob
+from bottle import FileUpload, BytesIO
 import tempfile
 
 class TestFileUpload(unittest.TestCase):
@@ -13,10 +13,6 @@ class TestFileUpload(unittest.TestCase):
 
     def test_raw_filename(self):
         self.assertEqual(FileUpload(None, None, 'x/x').raw_filename, 'x/x')
-
-    def test_content_type(self):
-        fu = FileUpload(None, None, None, {"Content-type": "text/plain"})
-        self.assertEqual(fu.content_type, 'text/plain')
 
     def assertFilename(self, bad, good):
         fu = FileUpload(None, None, bad)
@@ -67,3 +63,4 @@ class TestFileUpload(unittest.TestCase):
         self.assertEqual(fu.file.read(), open(filepath, 'rb').read())
         os.unlink(filepath)
         os.rmdir(dirpath)
+                

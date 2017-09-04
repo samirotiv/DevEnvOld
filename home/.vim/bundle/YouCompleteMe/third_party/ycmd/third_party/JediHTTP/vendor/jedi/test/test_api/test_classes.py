@@ -129,35 +129,11 @@ def test_completion_docstring():
     docstr('import jedi\njedi.Scr', cleandoc(Script.__doc__))
 
     docstr('abcd=3;abcd', '')
-    docstr('"hello"\nabcd=3\nabcd', '')
-    docstr(dedent('''
-        def x():
-            "hello"
-            0
-        x'''),
-        'hello'
-    )
-    docstr(dedent('''
-        def x():
-            "hello";0
-        x'''),
-        'hello'
-    )
+    docstr('"hello"\nabcd=3\nabcd', 'hello')
+    # It works with a ; as well.
+    docstr('"hello"\nabcd=3;abcd', 'hello')
     # Shouldn't work with a tuple.
-    docstr(dedent('''
-        def x():
-            "hello",0
-        x'''),
-        ''
-    )
-    # Should also not work if we rename something.
-    docstr(dedent('''
-        def x():
-            "hello"
-        y = x
-        y'''),
-        ''
-    )
+    docstr('"hello",0\nabcd=3\nabcd', '')
 
 
 def test_completion_params():
@@ -188,7 +164,7 @@ def test_param_endings():
     around them.
     """
     sig = Script('def x(a, b=5, c=""): pass\n x(').call_signatures()[0]
-    assert [p.description for p in sig.params] == ['param a', 'param b=5', 'param c=""']
+    assert [p.description for p in sig.params] == ['a', 'b=5', 'c=""']
 
 
 class TestIsDefinition(TestCase):
@@ -226,8 +202,9 @@ class TestIsDefinition(TestCase):
 
 class TestParent(TestCase):
     def _parent(self, source, line=None, column=None):
-        def_, = Script(dedent(source), line, column).goto_assignments()
-        return def_.parent()
+        defs = Script(dedent(source), line, column).goto_assignments()
+        assert len(defs) == 1
+        return defs[0].parent()
 
     def test_parent(self):
         parent = self._parent('foo=1\nfoo')
@@ -254,7 +231,7 @@ class TestParent(TestCase):
                 def bar(): pass
             Foo().bar''')).completions()[0].parent()
         assert parent.name == 'Foo'
-        assert parent.type == 'class'
+        assert parent.type == 'instance'
 
         parent = Script('str.join').completions()[0].parent()
         assert parent.name == 'str'
@@ -262,23 +239,11 @@ class TestParent(TestCase):
 
 
 def test_type():
-    for c in Script('a = [str()]; a[0].').completions():
-        if c.name == '__class__':
-            assert c.type == 'class'
-        else:
-            assert c.type in ('function', 'instance')
-
-    # Github issue #397, type should never raise an error.
+    """
+    Github issue #397, type should never raise an error.
+    """
     for c in Script('import os; os.path.').completions():
         assert c.type
-
-def test_type_II():
-    """
-    GitHub Issue #833, `keyword`s are seen as `module`s
-    """
-    for c in Script('f').completions():
-        if c.name == 'for':
-            assert c.type == 'keyword'
 
 
 class TestGotoAssignments(TestCase):
@@ -304,7 +269,7 @@ class TestGotoAssignments(TestCase):
               """
         bar = names(dedent(src), references=True)[-1]
         param = bar.goto_assignments()[0]
-        assert (param.line, param.column) == (1, 13)
+        assert param.start_pos == (1, 13)
         assert param.type == 'param'
 
     def test_class_call(self):
@@ -322,27 +287,27 @@ class TestGotoAssignments(TestCase):
     def test_import(self):
         nms = names('from json import load', references=True)
         assert nms[0].name == 'json'
-        assert nms[0].type == 'module'
+        assert nms[0].type == 'import'
         n = nms[0].goto_assignments()[0]
         assert n.name == 'json'
         assert n.type == 'module'
 
         assert nms[1].name == 'load'
-        assert nms[1].type == 'function'
+        assert nms[1].type == 'import'
         n = nms[1].goto_assignments()[0]
         assert n.name == 'load'
         assert n.type == 'function'
 
         nms = names('import os; os.path', references=True)
         assert nms[0].name == 'os'
-        assert nms[0].type == 'module'
+        assert nms[0].type == 'import'
         n = nms[0].goto_assignments()[0]
         assert n.name == 'os'
         assert n.type == 'module'
 
         n = nms[2].goto_assignments()[0]
         assert n.name == 'path'
-        assert n.type == 'module'
+        assert n.type == 'import'
 
         nms = names('import os.path', references=True)
         n = nms[0].goto_assignments()[0]
@@ -357,21 +322,17 @@ class TestGotoAssignments(TestCase):
     def test_import_alias(self):
         nms = names('import json as foo', references=True)
         assert nms[0].name == 'json'
-        assert nms[0].type == 'module'
-        assert nms[0]._name.tree_name.get_definition().type == 'import_name'
+        assert nms[0].type == 'import'
         n = nms[0].goto_assignments()[0]
         assert n.name == 'json'
         assert n.type == 'module'
-        assert n._name._context.tree_node.type == 'file_input'
 
         assert nms[1].name == 'foo'
-        assert nms[1].type == 'module'
-        assert nms[1]._name.tree_name.get_definition().type == 'import_name'
+        assert nms[1].type == 'import'
         ass = nms[1].goto_assignments()
         assert len(ass) == 1
         assert ass[0].name == 'json'
         assert ass[0].type == 'module'
-        assert ass[0]._name._context.tree_node.type == 'file_input'
 
 
 def test_added_equals_to_params():

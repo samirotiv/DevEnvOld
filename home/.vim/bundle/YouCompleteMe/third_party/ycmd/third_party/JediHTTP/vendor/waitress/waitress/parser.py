@@ -182,8 +182,6 @@ class HTTPRequestParser(object):
             index = line.find(b':')
             if index > 0:
                 key = line[:index]
-                if b'_' in key:
-                    continue
                 value = line[index + 1:].strip()
                 key1 = tostr(key.upper().replace(b'-', b'_'))
                 # If a header already exists, we append subsequent values
@@ -253,10 +251,7 @@ class HTTPRequestParser(object):
 def split_uri(uri):
     # urlsplit handles byte input by returning bytes on py3, so
     # scheme, netloc, path, query, and fragment are bytes
-    try:
-        scheme, netloc, path, query, fragment = urlparse.urlsplit(uri)
-    except UnicodeError:
-        raise ParsingError('Bad URI')
+    scheme, netloc, path, query, fragment = urlparse.urlsplit(uri)
     return (
         tostr(scheme),
         tostr(netloc),
@@ -276,7 +271,7 @@ def get_header_lines(header):
             if not r:
                 # http://corte.si/posts/code/pathod/pythonservers/index.html
                 raise ParsingError('Malformed header line "%s"' % tostr(line))
-            r[-1] += line
+            r[-1] = r[-1] + line[1:]
         else:
             r.append(line)
     return r
@@ -294,20 +289,8 @@ def crack_first_line(line):
             version = m.group(5)
         else:
             version = None
-        method = m.group(1)
-
-        # the request methods that are currently defined are all uppercase:
-        # https://www.iana.org/assignments/http-methods/http-methods.xhtml and
-        # the request method is case sensitive according to
-        # https://tools.ietf.org/html/rfc7231#section-4.1
-
-        # By disallowing anything but uppercase methods we save poor
-        # unsuspecting souls from sending lowercase HTTP methods to waitress
-        # and having the request complete, while servers like nginx drop the
-        # request onto the floor.
-        if method != method.upper():
-            raise ParsingError('Malformed HTTP method "%s"' % tostr(method))
+        command = m.group(1).upper()
         uri = m.group(2)
-        return method, uri, version
+        return command, uri, version
     else:
         return b'', b'', b''

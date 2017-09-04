@@ -12,7 +12,7 @@ Jedi - an awesome autocompletion/static analysis library for Python
 
 
 *If you have specific questions, please add an issue or ask on* `stackoverflow
-<https://stackoverflow.com/questions/tagged/python-jedi>`_ *with the label* ``python-jedi``.
+<https://stackoverflow.com>`_ *with the label* ``python-jedi``.
 
 
 Jedi is a static analysis tool for Python that can be used in IDEs/editors. Its
@@ -32,7 +32,7 @@ It's really easy.
 
 Jedi can currently be used with the following editors/projects:
 
-- Vim (jedi-vim_, YouCompleteMe_, deoplete-jedi_, completor.vim_)
+- Vim (jedi-vim_, YouCompleteMe_, deoplete-jedi_)
 - Emacs (Jedi.el_, company-mode_, elpy_, anaconda-mode_, ycmd_)
 - Sublime Text (SublimeJEDI_ [ST2 + ST3], anaconda_ [only ST3])
 - TextMate_ (Not sure if it's actually working)
@@ -45,7 +45,6 @@ Jedi can currently be used with the following editors/projects:
 - Gedit (gedi_)
 - wdb_ - Web Debugger
 - `Eric IDE`_ (Available as a plugin)
-- `Ipython 6.0.0+ <http://ipython.readthedocs.io/en/stable/whatsnew/version6.html>`_
 
 and many more!
 
@@ -123,11 +122,8 @@ The returned objects are very powerful and really all you might need.
 Autocompletion in your REPL (IPython, etc.)
 -------------------------------------------
 
-Starting with Ipython `6.0.0` Jedi is a dependency of IPython. Autocompletion
-in IPython is therefore possible without additional configuration.
-
 It's possible to have Jedi autocompletion in REPL modes - `example video <https://vimeo.com/122332037>`_.
-This means that in Python you can enable tab completion in a `REPL
+This means that IPython and others are `supported
 <https://jedi.readthedocs.org/en/latest/docs/usage.html#tab-completion-in-the-python-shell>`_.
 
 
@@ -195,7 +191,6 @@ Acknowledgements
 .. _jedi-vim: https://github.com/davidhalter/jedi-vim
 .. _youcompleteme: http://valloric.github.io/YouCompleteMe/
 .. _deoplete-jedi: https://github.com/zchee/deoplete-jedi
-.. _completor.vim: https://github.com/maralla/completor.vim
 .. _Jedi.el: https://github.com/tkf/emacs-jedi
 .. _company-mode: https://github.com/syohex/emacs-company-jedi
 .. _elpy: https://github.com/jorgenschaefer/elpy

@@ -725,7 +725,7 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 						}
 						if (rhsType.Kind == TypeKind.Enum) {
 							// U operator –(E x, E y);
-							if (TryConvertEnum(ref lhs, rhs.Type, ref isNullable, ref rhs)) {
+							if (TryConvertEnum(ref lhs, rhs.Type, ref isNullable, ref rhs, allowConversionFromConstantZero: false)) {
 								return HandleEnumSubtraction(isNullable, rhsType, lhs, rhs);
 							}
 
@@ -1586,8 +1586,7 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 								resultType = def;
 							
 							if (firstResult == null || !TopLevelTypeDefinitionIsAccessible(firstResult.GetDefinition())) {
-								if (TopLevelTypeDefinitionIsAccessible(resultType.GetDefinition()))
-									firstResult = resultType;
+								firstResult = resultType;
 							} else if (TopLevelTypeDefinitionIsAccessible(def)) {
 								return new AmbiguousTypeResolveResult(firstResult);
 							}
@@ -1833,7 +1832,7 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 		{
 			var lookup = CreateMemberLookup();
 			List<List<IMethod>> extensionMethodGroups = new List<List<IMethod>>();
-			foreach (var inputGroup in GetAllExtensionMethods(lookup)) {
+			foreach (var inputGroup in GetAllExtensionMethods()) {
 				List<IMethod> outputGroup = new List<IMethod>();
 				foreach (var method in inputGroup) {
 					if (name != null && method.Name != name)
@@ -1927,7 +1926,7 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 		/// Gets all extension methods available in the current using scope.
 		/// This list includes inaccessible methods.
 		/// </summary>
-		IList<List<IMethod>> GetAllExtensionMethods(MemberLookup lookup)
+		IList<List<IMethod>> GetAllExtensionMethods()
 		{
 			var currentUsingScope = context.CurrentUsingScope;
 			if (currentUsingScope == null)
@@ -1941,14 +1940,14 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 			for (ResolvedUsingScope scope = currentUsingScope; scope != null; scope = scope.Parent) {
 				INamespace ns = scope.Namespace;
 				if (ns != null) {
-					m = GetExtensionMethods(lookup, ns).ToList();
+					m = GetExtensionMethods(ns).ToList();
 					if (m.Count > 0)
 						extensionMethodGroups.Add(m);
 				}
 				
 				m = scope.Usings
 					.Distinct()
-					.SelectMany(importedNamespace =>  GetExtensionMethods(lookup, importedNamespace))
+					.SelectMany(importedNamespace => GetExtensionMethods(importedNamespace))
 					.ToList();
 				if (m.Count > 0)
 					extensionMethodGroups.Add(m);
@@ -1956,12 +1955,12 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 			return LazyInit.GetOrSet(ref currentUsingScope.AllExtensionMethods, extensionMethodGroups);
 		}
 		
-		IEnumerable<IMethod> GetExtensionMethods(MemberLookup lookup, INamespace ns)
+		IEnumerable<IMethod> GetExtensionMethods(INamespace ns)
 		{
 			// TODO: maybe make this a property on INamespace?
 			return
 				from c in ns.Types
-				where c.IsStatic && c.HasExtensionMethods && c.TypeParameters.Count == 0 && lookup.IsAccessible(c, false)
+				where c.IsStatic && c.HasExtensionMethods && c.TypeParameters.Count == 0
 				from m in c.Methods
 				where m.IsExtensionMethod
 				select m;
@@ -2252,7 +2251,7 @@ namespace ICSharpCode.NRefactory.CSharp.Resolver
 				if (invoke != null) {
 					input = new MethodGroupResolveResult(
 						input, invoke.Name,
-						methods: new[] { new MethodListWithDeclaringType(input.Type) { invoke } },
+						methods: new[] { new MethodListWithDeclaringType(invoke.DeclaringType) { invoke } },
 						typeArguments: EmptyList<IType>.Instance
 					);
 				}

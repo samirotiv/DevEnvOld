@@ -17,6 +17,7 @@
 
 #include "CompilationDatabase.h"
 #include "ClangUtils.h"
+#include "standard.h"
 #include "ReleaseGil.h"
 #include "PythonSupport.h"
 
@@ -80,7 +81,7 @@ CompilationInfoForFile CompilationDatabase::GetCompilationInfoForFile(
       compilation_database_,
       path_to_file_string.c_str() ), clang_CompileCommands_dispose );
 
-  size_t num_commands = clang_CompileCommands_getSize( commands.get() );
+  uint num_commands = clang_CompileCommands_getSize( commands.get() );
 
   if ( num_commands < 1 ) {
     return info;
@@ -94,10 +95,10 @@ CompilationInfoForFile CompilationDatabase::GetCompilationInfoForFile(
   info.compiler_working_dir_ = CXStringToString(
                                  clang_CompileCommand_getDirectory( command ) );
 
-  size_t num_flags = clang_CompileCommand_getNumArgs( command );
+  uint num_flags = clang_CompileCommand_getNumArgs( command );
   info.compiler_flags_.reserve( num_flags );
 
-  for ( size_t i = 0; i < num_flags; ++i ) {
+  for ( uint i = 0; i < num_flags; ++i ) {
     info.compiler_flags_.push_back(
       CXStringToString( clang_CompileCommand_getArg( command, i ) ) );
   }

@@ -7329,9 +7329,7 @@ oneleft(void)
 #ifdef FEAT_VIRTUALEDIT
     if (virtual_active())
     {
-# ifdef FEAT_LINEBREAK
 	int width;
-# endif
 	int v = getviscol();
 
 	if (v == 0)
@@ -9418,7 +9416,7 @@ ins_mousescroll(int dir)
 {
     pos_T	tpos;
 # if defined(FEAT_WINDOWS)
-    win_T	*old_curwin = curwin, *wp;
+    win_T	*old_curwin = curwin;
 # endif
 # ifdef FEAT_INS_EXPAND
     int		did_scroll = FALSE;
@@ -9435,10 +9433,7 @@ ins_mousescroll(int dir)
 	col = mouse_col;
 
 	/* find the window at the pointer coordinates */
-	wp = mouse_find_win(&row, &col);
-	if (wp == NULL)
-	    return;
-	curwin = wp;
+	curwin = mouse_find_win(&row, &col);
 	curbuf = curwin->w_buffer;
     }
     if (curwin == old_curwin)

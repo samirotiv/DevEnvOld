@@ -1,32 +1,21 @@
-language: generic
-
+language: rust
 sudo: false
 
-cache:
-  directories:
-    - $HOME/.cargo
+cache: cargo
 
 before_install:
-  - curl https://sh.rustup.rs -sSf | sh -s -- -y
-  - export PATH=$HOME/.cargo/bin:$PATH
-  - rustup update
-  - rustc -Vv
-  - cargo -V
-  - rustup component add rust-src
-  - export RUST_SRC_PATH=`rustc --print sysroot`/lib/rustlib/src/rust/src
-  - export RUST_BACKTRACE=1
+  - export RUST_SRC_PATH=$(scripts/download_rust_source.sh)
 
-env:
-  matrix:
-    - RUST_DISTRIBUTION=stable
-    - RUST_DISTRIBUTION=beta
-    - RUST_DISTRIBUTION=nightly
+rust:
+  - stable
+  - beta
+  - nightly
 
 matrix:
   allow_failures:
-    - env: RUST_DISTRIBUTION=beta
-    - env: RUST_DISTRIBUTION=nightly
+    - rust: nightly
+    - rust: beta
 
 script:
-  - cargo test --verbose
+  - cargo test
   - scripts/assert_cargo_lock_unchanged

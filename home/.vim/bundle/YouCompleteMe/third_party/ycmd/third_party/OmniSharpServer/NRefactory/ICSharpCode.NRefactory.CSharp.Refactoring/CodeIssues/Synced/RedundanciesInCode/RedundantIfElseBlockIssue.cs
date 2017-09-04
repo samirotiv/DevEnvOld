@@ -34,7 +34,6 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 	                  Description = "Redundant 'else' keyword.",
 	                  Category = IssueCategories.RedundanciesInCode,
 	                  Severity = Severity.Warning,
-	                  IsEnabledByDefault = false,
 	                  AnalysisDisableKeyword = "RedundantIfElseBlock")]
 	public class RedundantIfElseBlockIssue : GatherVisitorCodeIssueProvider
 	{

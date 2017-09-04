@@ -87,8 +87,7 @@ class Test():
 
     def boo(self):
         if isinstance(self.testing, str):
-            # TODO this is wrong, it should only be str.
-            #? str() int()
+            #? str()
             self.testing
             #? Test()
             self

@@ -16,7 +16,8 @@ import asyncore
 import os
 import socket
 import errno
-import threading
+
+from waitress.compat import thread
 
 # Wake up a call to select() running in the main thread.
 #
@@ -58,7 +59,7 @@ class _triggerbase(object):
 
         # `lock` protects the `thunks` list from being traversed and
         # appended to simultaneously.
-        self.lock = threading.Lock()
+        self.lock = thread.allocate_lock()
 
         # List of no-argument callbacks to invoke when the trigger is
         # pulled.  These run in the thread running the asyncore mainloop,
@@ -89,8 +90,11 @@ class _triggerbase(object):
 
     def pull_trigger(self, thunk=None):
         if thunk:
-            with self.lock:
+            self.lock.acquire()
+            try:
                 self.thunks.append(thunk)
+            finally:
+                self.lock.release()
         self._physical_pull()
 
     def handle_read(self):
@@ -98,7 +102,8 @@ class _triggerbase(object):
             self.recv(8192)
         except (OSError, socket.error):
             return
-        with self.lock:
+        self.lock.acquire()
+        try:
             for thunk in self.thunks:
                 try:
                     thunk()
@@ -108,6 +113,8 @@ class _triggerbase(object):
                         'exception in trigger thunk: (%s:%s %s)' %
                         (t, v, tbinfo))
             self.thunks = []
+        finally:
+            self.lock.release()
 
 if os.name == 'posix':
 

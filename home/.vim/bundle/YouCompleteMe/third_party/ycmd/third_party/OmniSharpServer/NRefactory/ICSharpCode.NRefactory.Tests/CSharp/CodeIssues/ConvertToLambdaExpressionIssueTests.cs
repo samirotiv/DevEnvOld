@@ -195,24 +195,6 @@ class TestClass
 		}
 
 
-		/// <summary>
-		/// Bug 22106 - Applying suggested fix causes error
-		/// </summary>
-		[Test]
-		public void TestBug22106 ()
-		{
-			TestWrongContext<ConvertToLambdaExpressionIssue> (@"
-class TestClass
-{
-	void TestMethod ()
-	{
-		alert.SetPositiveButton(""OK"", (sender, e) =>
-				{
-					return;
-				});
-	}
-}");
-		}
 	}
 }
 

@@ -19,7 +19,8 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 import os
@@ -87,17 +88,12 @@ class IdentifierCompleter( GeneralCompleter ):
     self._AddIdentifier(
       _PreviousIdentifier(
         self.user_options[ 'min_num_of_chars_for_completion' ],
-        self.user_options[ 'collect_identifiers_from_comments_and_strings' ],
         request_data ),
       request_data )
 
 
   def _AddIdentifierUnderCursor( self, request_data ):
-    self._AddIdentifier(
-      _GetCursorIdentifier(
-        self.user_options[ 'collect_identifiers_from_comments_and_strings' ],
-        request_data ),
-      request_data )
+    self._AddIdentifier( _GetCursorIdentifier( request_data ), request_data )
 
 
   def _AddBufferIdentifiers( self, request_data ):
@@ -179,9 +175,7 @@ class IdentifierCompleter( GeneralCompleter ):
 
 # This looks for the previous identifier and returns it; this might mean looking
 # at last identifier on the previous line if a new line has just been created.
-def _PreviousIdentifier( min_num_candidate_size_chars,
-                         collect_from_comments_and_strings,
-                         request_data ):
+def _PreviousIdentifier( min_num_candidate_size_chars, request_data ):
   def PreviousIdentifierOnLine( line, column, filetype ):
     nearest_ident = ''
     for match in identifier_utils.IdentifierRegexForFiletype(
@@ -193,13 +187,11 @@ def _PreviousIdentifier( min_num_candidate_size_chars,
   line_num = request_data[ 'line_num' ] - 1
   column_num = request_data[ 'column_codepoint' ] - 1
   filepath = request_data[ 'filepath' ]
+
+  contents_per_line = (
+    SplitLines( request_data[ 'file_data' ][ filepath ][ 'contents' ] ) )
+
   filetype = request_data[ 'first_filetype' ]
-
-  contents = request_data[ 'file_data' ][ filepath ][ 'contents' ]
-  if not collect_from_comments_and_strings:
-    contents = identifier_utils.RemoveIdentifierFreeText( contents, filetype )
-  contents_per_line = SplitLines( contents )
-
   ident = PreviousIdentifierOnLine( contents_per_line[ line_num ],
                                     column_num,
                                     filetype )
@@ -227,23 +219,18 @@ def _RemoveSmallCandidates( candidates, min_num_candidate_size_chars ):
   return [ x for x in candidates if len( x ) >= min_num_candidate_size_chars ]
 
 
-def _GetCursorIdentifier( collect_from_comments_and_strings,
-                          request_data ):
-  line = request_data[ 'line_value' ]
-  filetype = request_data[ 'first_filetype' ]
-  if not collect_from_comments_and_strings:
-    line = identifier_utils.RemoveIdentifierFreeText( line, filetype )
+def _GetCursorIdentifier( request_data ):
   return identifier_utils.IdentifierAtIndex(
-      line,
+      request_data[ 'line_value' ],
       request_data[ 'column_codepoint' ] - 1,
-      filetype )
+      request_data[ 'first_filetype' ] )
 
 
 def _IdentifiersFromBuffer( text,
                             filetype,
                             collect_from_comments_and_strings ):
   if not collect_from_comments_and_strings:
-    text = identifier_utils.RemoveIdentifierFreeText( text, filetype )
+    text = identifier_utils.RemoveIdentifierFreeText( text )
   idents = identifier_utils.ExtractIdentifiersFromText( text, filetype )
   vector = ycm_core.StringVector()
   for ident in idents:

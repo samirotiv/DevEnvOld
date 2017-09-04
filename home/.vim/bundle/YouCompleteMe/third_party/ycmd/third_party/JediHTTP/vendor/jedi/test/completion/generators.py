@@ -108,7 +108,7 @@ for c in Counter(3, 8):
 
 
 # -----------------
-# tuple assignments
+# tuples
 # -----------------
 def gen():
     if random.choice([0,1]):
@@ -148,9 +148,6 @@ a
 #? str()
 b
 
-a, = (a for a in [1])
-#? int()
-a
 
 # -----------------
 # More complicated access

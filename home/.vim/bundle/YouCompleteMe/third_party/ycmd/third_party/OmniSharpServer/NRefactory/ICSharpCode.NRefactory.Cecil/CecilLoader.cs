@@ -32,8 +32,6 @@ using Mono.Cecil;
 
 namespace ICSharpCode.NRefactory.TypeSystem
 {
-	using BlobReader = ICSharpCode.NRefactory.TypeSystem.Implementation.BlobReader;
-
 	/// <summary>
 	/// Allows loading an IProjectContent from an already compiled assembly.
 	/// </summary>
@@ -66,7 +64,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 		/// If you access the Cecil objects directly in your application, you may need to take the same lock.
 		/// </remarks>
 		public bool LazyLoad { get; set; }
-
+		
 		/// <summary>
 		/// This delegate gets executed whenever an entity was loaded.
 		/// </summary>
@@ -76,7 +74,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 		/// Warning: if delay-loading is used and the type system is accessed by multiple threads,
 		/// the callback may be invoked concurrently on multiple threads.
 		/// </remarks>
-		[CLSCompliant(false)]
 		public Action<IUnresolvedEntity, MemberReference> OnEntityLoaded { get; set; }
 		
 		/// <summary>
@@ -86,21 +83,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 		/// <c>true</c> if this instance has references to the cecil objects; otherwise, <c>false</c>.
 		/// </value>
 		public bool HasCecilReferences { get { return typeSystemTranslationTable != null; } }
-		
-		bool shortenInterfaceImplNames = true;
-		
-		/// <summary>
-		/// Specifies whether method names of explicit interface-implementations should be shortened.
-		/// </summary>
-		/// <remarks>This is important when working with parser-initialized type-systems in order to be consistent.</remarks>
-		public bool ShortenInterfaceImplNames {
-			get {
-				return shortenInterfaceImplNames;
-			}
-			set {
-				shortenInterfaceImplNames = value;
-			}
-		}
 		#endregion
 		
 		ModuleDefinition currentModule;
@@ -136,7 +118,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 			this.IncludeInternalMembers = loader.IncludeInternalMembers;
 			this.LazyLoad = loader.LazyLoad;
 			this.OnEntityLoaded = loader.OnEntityLoaded;
-			this.ShortenInterfaceImplNames = loader.ShortenInterfaceImplNames;
 			this.currentModule = loader.currentModule;
 			this.currentAssembly = loader.currentAssembly;
 			// don't use interning - the interning provider is most likely not thread-safe
@@ -309,10 +290,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 		// used to prevent Cecil from loading referenced assemblies
 		sealed class DummyAssemblyResolver : IAssemblyResolver
 		{
-			public void Dispose ()
-			{
-			}
-
 			public AssemblyDefinition Resolve(AssemblyNameReference name)
 			{
 				return null;
@@ -392,7 +369,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 				return interningProvider.Intern(new ParameterizedTypeReference(baseType, para));
 			} else if (type is GenericParameter) {
 				GenericParameter typeGP = (GenericParameter)type;
-				return TypeParameterReference.Create(typeGP.Owner is MethodReference ? SymbolKind.Method : SymbolKind.TypeDefinition, typeGP.Position);
+				return TypeParameterReference.Create(typeGP.Owner is MethodDefinition ? SymbolKind.Method : SymbolKind.TypeDefinition, typeGP.Position);
 			} else if (type.IsNested) {
 				ITypeReference typeRef = CreateType(type.DeclaringType, typeAttributes, ref typeIndex);
 				int partTypeParameterCount;
@@ -447,7 +424,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 			return false;
 		}
 		#endregion
-
+		
 		#region Read Attributes
 		#region Assembly Attributes
 		static readonly ITypeReference assemblyVersionAttributeTypeRef = typeof(System.Reflection.AssemblyVersionAttribute).ToTypeReference();
@@ -746,15 +723,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 		}
 		#endregion
 		
-		#region Type Parameter Attributes
-		void AddAttributes(GenericParameter genericParameter, IUnresolvedTypeParameter targetTP)
-		{
-			if (genericParameter.HasCustomAttributes) {
-				AddCustomAttributes(genericParameter.CustomAttributes, targetTP.Attributes);
-			}
-		}
-		#endregion
-		
 		#region MarshalAsAttribute (ConvertMarshalInfo)
 		static readonly ITypeReference marshalAsAttributeTypeRef = typeof(MarshalAsAttribute).ToTypeReference();
 		static readonly ITypeReference unmanagedTypeTypeRef = typeof(UnmanagedType).ToTypeReference();
@@ -856,13 +824,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 		
 		void AddSecurityAttributes(SecurityDeclaration secDecl, IList<IUnresolvedAttribute> targetCollection)
 		{
-			byte[] blob;
-			try {
-				blob = secDecl.GetBlob();
-			} catch (NotSupportedException) {
-				return; // https://github.com/icsharpcode/SharpDevelop/issues/284
-			}
-			var blobSecDecl = new UnresolvedSecurityDeclarationBlob((int)secDecl.Action, blob);
+			var blobSecDecl = new UnresolvedSecurityDeclarationBlob((int)secDecl.Action, secDecl.GetBlob());
 			targetCollection.AddRange(blobSecDecl.UnresolvedAttributes);
 		}
 		#endregion
@@ -895,7 +857,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 			for (int i = 0; i < typeParameters.Count; i++) {
 				var tp = (DefaultUnresolvedTypeParameter)typeParameters[i];
 				AddConstraints(tp, typeDefinition.GenericParameters[i]);
-				AddAttributes(typeDefinition.GenericParameters[i], tp);
 				tp.ApplyInterningProvider(interningProvider);
 			}
 		}
@@ -935,8 +896,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 					baseTypes.Add(ReadTypeReference(typeDefinition.BaseType));
 				}
 				if (typeDefinition.HasInterfaces) {
-					foreach (InterfaceImplementation ii in typeDefinition.Interfaces) {
-						var iface = ii.InterfaceType;
+					foreach (TypeReference iface in typeDefinition.Interfaces) {
 						baseTypes.Add(ReadTypeReference(iface));
 					}
 				}
@@ -1363,7 +1323,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 				for (int i = 0; i < method.GenericParameters.Count; i++) {
 					var tp = (DefaultUnresolvedTypeParameter)m.TypeParameters[i];
 					AddConstraints(tp, method.GenericParameters[i]);
-					AddAttributes(method.GenericParameters[i], tp);
 					tp.ApplyInterningProvider(interningProvider);
 				}
 			}
@@ -1379,9 +1338,6 @@ namespace ICSharpCode.NRefactory.TypeSystem
 					m.Parameters.Add(ReadParameter(p));
 				}
 			}
-			if (method.CallingConvention == MethodCallingConvention.VarArg) {
-				m.Parameters.Add(new DefaultUnresolvedParameter(SpecialType.ArgList, string.Empty));
-			}
 			
 			// mark as extension method if the attribute is set
 			if (method.IsStatic && HasExtensionAttribute(method)) {
@@ -1391,8 +1347,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 			int lastDot = method.Name.LastIndexOf('.');
 			if (lastDot >= 0 && method.HasOverrides) {
 				// To be consistent with the parser-initialized type system, shorten the method name:
-				if (ShortenInterfaceImplNames)
-					m.Name = method.Name.Substring(lastDot + 1);
+				m.Name = method.Name.Substring(lastDot + 1);
 				m.IsExplicitInterfaceImplementation = true;
 				foreach (var or in method.Overrides) {
 					m.ExplicitInterfaceImplementations.Add(new DefaultMemberReference(
@@ -1682,8 +1637,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 
 			var accessor = p.Getter ?? p.Setter;
 			if (accessor != null && accessor.IsExplicitInterfaceImplementation) {
-				if (ShortenInterfaceImplNames)
-					p.Name = property.Name.Substring(property.Name.LastIndexOf('.') + 1);
+				p.Name = property.Name.Substring(property.Name.LastIndexOf('.') + 1);
 				p.IsExplicitInterfaceImplementation = true;
 				foreach (var mr in accessor.ExplicitInterfaceImplementations) {
 					p.ExplicitInterfaceImplementations.Add(new AccessorOwnerMemberReference(mr));
@@ -1716,8 +1670,7 @@ namespace ICSharpCode.NRefactory.TypeSystem
 			
 			var accessor = e.AddAccessor ?? e.RemoveAccessor ?? e.InvokeAccessor;
 			if (accessor != null && accessor.IsExplicitInterfaceImplementation) {
-				if (ShortenInterfaceImplNames)
-					e.Name = ev.Name.Substring(ev.Name.LastIndexOf('.') + 1);
+				e.Name = ev.Name.Substring(ev.Name.LastIndexOf('.') + 1);
 				e.IsExplicitInterfaceImplementation = true;
 				foreach (var mr in accessor.ExplicitInterfaceImplementations) {
 					e.ExplicitInterfaceImplementations.Add(new AccessorOwnerMemberReference(mr));

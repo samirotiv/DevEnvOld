@@ -414,7 +414,8 @@ class TestClass
 		if (i == 0) {
 			int precedentResult = await task1;
 			return 1;
-		} else {
+		}
+		else {
 			int precedentResult1 = await task2;
 			return 2;
 		}
@@ -686,7 +687,7 @@ class TestClass
 	public Task Foo() { return null; }
 	public async Task TestMethod ()
 	{
-		int precedentResult = await Foo ().ContinueWith (precedent => {
+		int precedentResult = await Foo ().ContinueWith (precedent =>  {
 			return 1;
 		});
 		Console.WriteLine (precedentResult);

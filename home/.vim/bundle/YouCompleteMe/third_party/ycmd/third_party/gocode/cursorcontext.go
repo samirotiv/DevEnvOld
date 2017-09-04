@@ -130,13 +130,6 @@ func (ti *token_iterator) extract_struct_type() string {
 	if !ti.go_back() {
 		return ""
 	}
-	if ti.token().tok == token.LBRACE {
-		if !ti.go_back() {
-			return ""
-		}
-	} else if ti.token().tok == token.COMMA {
-		return ti.extract_struct_type()
-	}
 	if ti.token().tok != token.IDENT {
 		return ""
 	}
@@ -413,7 +406,7 @@ func resolveKnownPackageIdent(ident string, filename string, context *package_lo
 		return nil
 	}
 
-	p := new_package_file_cache(path, path)
+	p := new_package_file_cache(path)
 	p.update_cache()
 	return p.main
 }

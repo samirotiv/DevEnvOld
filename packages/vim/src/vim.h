@@ -680,8 +680,7 @@ extern int (*dyn_libintl_putenv)(const char *envstring);
 #define HL_UNDERLINE		0x08
 #define HL_UNDERCURL		0x10
 #define HL_STANDOUT		0x20
-#define HL_NOCOMBINE		0x40
-#define HL_ALL			0x7f
+#define HL_ALL			0x3f
 
 /* special attribute addition: Put message in history */
 #define MSG_HIST		0x1000
@@ -809,7 +808,6 @@ extern int (*dyn_libintl_putenv)(const char *envstring);
 #define EXPAND_USER_ADDR_TYPE	44
 #define EXPAND_PACKADD		45
 #define EXPAND_MESSAGES		46
-#define EXPAND_MAPCLEAR		47
 
 /* Values for exmode_active (0 is no exmode) */
 #define EXMODE_NORMAL		1
@@ -1432,12 +1430,10 @@ typedef enum
     , HLF_TP	    /* tabpage line */
     , HLF_TPS	    /* tabpage line selected */
     , HLF_TPF	    /* tabpage line filler */
-    , HLF_CUC	    /* 'cursorcolumn' */
-    , HLF_CUL	    /* 'cursorline' */
+    , HLF_CUC	    /* 'cursurcolumn' */
+    , HLF_CUL	    /* 'cursurline' */
     , HLF_MC	    /* 'colorcolumn' */
     , HLF_QFL	    /* quickfix window line currently selected */
-    , HLF_ST	    /* status lines of terminal windows */
-    , HLF_STNC	    /* status lines of not-current terminal windows */
     , HLF_COUNT	    /* MUST be the last one */
 } hlf_T;
 
@@ -1447,8 +1443,7 @@ typedef enum
 		  'n', 'N', 'r', 's', 'S', 'c', 't', 'v', 'V', 'w', 'W', \
 		  'f', 'F', 'A', 'C', 'D', 'T', '-', '>', \
 		  'B', 'P', 'R', 'L', \
-		  '+', '=', 'x', 'X', '*', '#', '_', '!', '.', 'o', 'q', \
-		  'z', 'Z'}
+		  '+', '=', 'x', 'X', '*', '#', '_', '!', '.', 'o', 'q'}
 
 /*
  * Boolean constants
@@ -2145,11 +2140,6 @@ typedef enum {
 # define number_width(x) 7
 #endif
 
-/* This must come after including proto.h */
-#if !(defined(FEAT_MBYTE) && defined(WIN3264))
-# define mch_open(n, m, p)	open((n), (m), (p))
-# define mch_fopen(n, p)	fopen((n), (p))
-#endif
 
 #include "globals.h"	    /* global variables and messages */
 

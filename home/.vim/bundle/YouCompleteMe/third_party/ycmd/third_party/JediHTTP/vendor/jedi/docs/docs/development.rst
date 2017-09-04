@@ -59,25 +59,27 @@ Parser (parser/__init__.py)
 
 .. automodule:: jedi.parser
 
-Parser Tree (parser/tree.py)
+Parser Representation (parser/representation.py)
 ++++++++++++++++++++++++++++++++++++++++++++++++
 
-.. automodule:: jedi.parser.tree
+.. automodule:: jedi.parser.representation
 
 Class inheritance diagram:
 
 .. inheritance-diagram::
-   Module
+   SubModule
    Class
    Function
    Lambda
    Flow
-   ForStmt
+   ForFlow
    Import
-   ExprStmt
+   Statement
    Param
+   Call
+   Array
    Name
-   CompFor
+   ListComprehension
    :parts: 1
 
 .. _evaluate:
@@ -93,10 +95,12 @@ Evaluation Representation (evaluate/representation.py)
 .. automodule:: jedi.evaluate.representation
 
 .. inheritance-diagram::
-   jedi.evaluate.instance.TreeInstance
-   jedi.evaluate.representation.ClassContext
-   jedi.evaluate.representation.FunctionContext
-   jedi.evaluate.representation.FunctionExecutionContext
+   Executable
+   Instance
+   InstanceElement
+   Class
+   Function
+   FunctionExecution
    :parts: 1
 
 
@@ -129,7 +133,7 @@ Core Extensions is a summary of the following topics:
 
 - :ref:`Iterables & Dynamic Arrays <iterables>`
 - :ref:`Dynamic Parameters <dynamic>`
-- :ref:`Diff Parser <diff-parser>`
+- :ref:`Fast Parser <fast_parser>`
 - :ref:`Docstrings <docstrings>`
 - :ref:`Refactoring <refactoring>`
 
@@ -143,7 +147,7 @@ Iterables & Dynamic Arrays (evaluate/iterable.py)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To understand Python on a deeper level, |jedi| needs to understand some of the
-dynamic features of Python like lists that are filled after creation:
+dynamic features of Python, however this probably the most complicated part:
 
 .. automodule:: jedi.evaluate.iterable
 
@@ -156,12 +160,12 @@ Parameter completion (evaluate/dynamic.py)
 .. automodule:: jedi.evaluate.dynamic
 
 
-.. _diff-parser:
+.. _fast_parser:
 
-Diff Parser (parser/diff.py)
+Fast Parser (parser/fast.py)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. automodule:: jedi.parser.python.diff
+.. automodule:: jedi.parser.fast
 
 .. _docstrings:
 

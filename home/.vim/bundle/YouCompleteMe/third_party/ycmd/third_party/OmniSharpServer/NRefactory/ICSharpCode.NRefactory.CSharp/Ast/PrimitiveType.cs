@@ -113,13 +113,10 @@ namespace ICSharpCode.NRefactory.CSharp
 		public override ITypeReference ToTypeReference(NameLookupMode lookupMode, InterningProvider interningProvider = null)
 		{
 			KnownTypeCode typeCode = GetTypeCodeForPrimitiveType(this.Keyword);
-			if (typeCode == KnownTypeCode.None) {
-				if (this.Keyword == "__arglist")
-					return SpecialType.ArgList;
+			if (typeCode == KnownTypeCode.None)
 				return new UnknownType(null, this.Keyword);
-			} else {
+			else
 				return KnownTypeReference.Get(typeCode);
-			}
 		}
 		
 		public static KnownTypeCode GetTypeCodeForPrimitiveType(string keyword)

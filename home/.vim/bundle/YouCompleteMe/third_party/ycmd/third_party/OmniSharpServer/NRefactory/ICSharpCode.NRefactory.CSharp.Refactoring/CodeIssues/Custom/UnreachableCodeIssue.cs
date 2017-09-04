@@ -35,7 +35,6 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 	[IssueDescription("Code is unreachable",
 		Description = "Code is unreachable.",
 		Category = IssueCategories.RedundanciesInCode,
-		IsEnabledByDefault = false,
 		Severity = Severity.Warning)]
 	public class UnreachableCodeIssue : GatherVisitorCodeIssueProvider
 	{
@@ -134,18 +133,6 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 					if (statement == null || !AddStatement(statement))
 						base.VisitChildren(node);
 				}
-				
-				static TextLocation GetPrevEnd(AstNode node)
-				{
-					var prev = node.GetPrevNode(n => !(n is NewLineNode));
-					return prev != null ? prev.EndLocation : node.StartLocation;
-				}
-
-				static TextLocation GetNextStart(AstNode node)
-				{
-					var next = node.GetNextNode(n => !(n is NewLineNode));
-					return next != null ? next.StartLocation : node.EndLocation;
-				}
 
 				bool AddStatement(Statement statement)
 				{
@@ -160,7 +147,7 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 					}
 
 
-					var prevEnd = GetPrevEnd(statement);
+					var prevEnd = statement.GetPrevNode(n => !(n is NewLineNode)).EndLocation;
 					TextLocation start;
 					TextLocation end;
 
@@ -172,12 +159,12 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 						collectedStatements.Add(statement);
 						visitor.unreachableNodes.Add(statement);
 						collectedStatements.Add(ife.ElseToken);
-						end = GetNextStart(ife.ElseToken);
+						end = ife.ElseToken.GetNextNode(n => !(n is NewLineNode)).StartLocation;
 					} else if (statement.Role == IfElseStatement.FalseRole) {
 						var ife = (IfElseStatement)statement.Parent;
 						start = ife.ElseToken.StartLocation;
 						collectedStatements.Add(ife.ElseToken);
-						prevEnd = GetPrevEnd(ife.ElseToken);
+						prevEnd = ife.ElseToken.GetPrevNode(n => !(n is NewLineNode)).EndLocation;
 						collectedStatements.Add(statement);
 						visitor.unreachableNodes.Add(statement);
 						end = statement.EndLocation;

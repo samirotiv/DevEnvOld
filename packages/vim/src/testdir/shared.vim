@@ -111,15 +111,14 @@ endfunc
 " Wait for up to a second for "expr" to become true.
 " Return time slept in milliseconds.  With the +reltime feature this can be
 " more than the actual waiting time.  Without +reltime it can also be less.
-func WaitFor(expr, ...)
-  let timeout = get(a:000, 0, 1000)
+func WaitFor(expr)
   " using reltime() is more accurate, but not always available
   if has('reltime')
     let start = reltime()
   else
     let slept = 0
   endif
-  for i in range(timeout / 10)
+  for i in range(100)
     try
       if eval(a:expr)
 	if has('reltime')
@@ -134,7 +133,7 @@ func WaitFor(expr, ...)
     endif
     sleep 10m
   endfor
-  return timeout
+  return 1000
 endfunc
 
 " Wait for up to a given milliseconds.
@@ -214,8 +213,4 @@ func RunVimPiped(before, after, arguments, pipecmd)
     call delete('Xafter.vim')
   endif
   return 1
-endfunc
-
-func CanRunGui()
-  return has('gui') && ($DISPLAY != "" || has('gui_running'))
 endfunc

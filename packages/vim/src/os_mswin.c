@@ -450,16 +450,6 @@ slash_adjust(char_u *p)
 {
     if (path_with_url(p))
 	return;
-
-    if (*p == '`')
-    {
-	size_t len = STRLEN(p);
-
-	/* don't replace backslash in backtick quoted strings */
-	if (len > 2 && *(p + len - 1) == '`')
-	    return;
-    }
-
     while (*p)
     {
 	if (*p == psepcN)
@@ -819,18 +809,6 @@ mch_char_avail(void)
     /* never used */
     return TRUE;
 }
-
-# if defined(FEAT_TERMINAL) || defined(PROTO)
-/*
- * Check for any pending input or messages.
- */
-    int
-mch_check_messages(void)
-{
-    /* TODO: check for messages */
-    return TRUE;
-}
-# endif
 #endif
 
 
@@ -2965,9 +2943,7 @@ get_logfont(
 	int	did_replace = FALSE;
 
 	for (i = 0; lf->lfFaceName[i]; ++i)
-	    if (IsDBCSLeadByte(lf->lfFaceName[i]))
-		++i;
-	    else if (lf->lfFaceName[i] == '_')
+	    if (lf->lfFaceName[i] == '_')
 	    {
 		lf->lfFaceName[i] = ' ';
 		did_replace = TRUE;

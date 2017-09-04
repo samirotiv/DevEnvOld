@@ -21,7 +21,8 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 from ycmd.utils import ( ByteOffsetToCodepointOffset,
@@ -40,45 +41,36 @@ class RequestWrap( object ):
     if validate:
       EnsureRequestValid( request )
     self._request = request
-
-    # Maps the keys returned by this objects __getitem__ to a # tuple of
-    # ( getter_method, setter_method ). Values computed by getter_method (or set
-    # by setter_method) are cached in _cached_computed.  setter_method may be
-    # None for read-only items.
     self._computed_key = {
       # Unicode string representation of the current line
-      'line_value': ( self._CurrentLine, None ),
+      'line_value': self._CurrentLine,
 
       # The calculated start column, as a codepoint offset into the
       # unicode string line_value
-      'start_codepoint': ( self._GetCompletionStartCodepoint,
-                           self._SetCompletionStartCodepoint ),
+      'start_codepoint': self.CompletionStartCodepoint,
 
       # The 'column_num' as a unicode codepoint offset
-      'column_codepoint': ( lambda: ByteOffsetToCodepointOffset(
-                              self[ 'line_bytes' ],
-                              self[ 'column_num' ] ),
-                            None ),
+      'column_codepoint': (lambda:
+        ByteOffsetToCodepointOffset( self[ 'line_bytes' ],
+                                     self[ 'column_num' ] ) ),
 
       # Bytes string representation of the current line
-      'line_bytes': ( lambda: ToBytes( self[ 'line_value' ] ),
-                      None ),
+      'line_bytes': lambda: ToBytes( self[ 'line_value' ] ),
 
       # The calculated start column, as a byte offset into the UTF-8 encoded
       # bytes returned by line_bytes
-      'start_column': ( self._GetCompletionStartColumn,
-                        self._SetCompletionStartColumn ),
+      'start_column': self.CompletionStartColumn,
 
       # Note: column_num is the byte offset into the UTF-8 encoded bytes
       # returned by line_bytes
 
       # unicode string representation of the 'query' after the beginning
       # of the identifier to be completed
-      'query': ( self._Query, None ),
+      'query': self._Query,
 
-      'filetypes': ( self._Filetypes, None ),
+      'filetypes': self._Filetypes,
 
-      'first_filetype': ( self._FirstFiletype, None ),
+      'first_filetype': self._FirstFiletype,
     }
     self._cached_computed = {}
 
@@ -87,21 +79,10 @@ class RequestWrap( object ):
     if key in self._cached_computed:
       return self._cached_computed[ key ]
     if key in self._computed_key:
-      getter, _ = self._computed_key[ key ]
-      value = getter()
+      value = self._computed_key[ key ]()
       self._cached_computed[ key ] = value
       return value
     return self._request[ key ]
-
-
-  def __setitem__( self, key, value ):
-    if key in self._computed_key:
-      _, setter = self._computed_key[ key ]
-      if setter:
-        setter( value )
-        return
-
-    raise ValueError( 'Key "{0}" is read-only'.format( key ) )
 
 
   def __contains__( self, key ):
@@ -122,51 +103,16 @@ class RequestWrap( object ):
     return SplitLines( contents )[ self._request[ 'line_num' ] - 1 ]
 
 
-  def _GetCompletionStartColumn( self ):
+  def CompletionStartColumn( self ):
     return CompletionStartColumn( self[ 'line_value' ],
                                   self[ 'column_num' ],
                                   self[ 'first_filetype' ] )
 
 
-  def _SetCompletionStartColumn( self, column_num ):
-    self._cached_computed[ 'start_column' ] = column_num
-
-    # Note: We must pre-compute (and cache) the codepoint equivalent. This is
-    # because the value calculated by the getter (_GetCompletionStartCodepoint)
-    # would be based on self[ 'column_codepoint' ] which would be incorrect; it
-    # does not know that the user has forced this value to be independent of the
-    # column.
-    self._cached_computed[ 'start_codepoint' ] = ByteOffsetToCodepointOffset(
-      self[ 'line_value' ],
-      column_num )
-
-    # The same applies to the 'query' (the bit after the start column up to the
-    # cursor column). It's dependent on the 'start_codepoint' so we must reset
-    # it.
-    self._cached_computed.pop( 'query', None )
-
-
-  def _GetCompletionStartCodepoint( self ):
+  def CompletionStartCodepoint( self ):
     return CompletionStartCodepoint( self[ 'line_value' ],
                                      self[ 'column_num' ],
                                      self[ 'first_filetype' ] )
-
-
-  def _SetCompletionStartCodepoint( self, codepoint_offset ):
-    self._cached_computed[ 'start_codepoint' ] = codepoint_offset
-
-    # Note: We must pre-compute (and cache) the byte equivalent. This is because
-    # the value calculated by the getter (_GetCompletionStartColumn) would be
-    # based on self[ 'column_num' ], which would be incorrect; it does not know
-    # that the user has forced this value to be independent of the column.
-    self._cached_computed[ 'start_column' ] = CodepointOffsetToByteOffset(
-      self[ 'line_value' ],
-      codepoint_offset )
-
-    # The same applies to the 'query' (the bit after the start column up to the
-    # cursor column). It's dependent on the 'start_codepoint' so we must reset
-    # it.
-    self._cached_computed.pop( 'query', None )
 
 
   def _Query( self ):

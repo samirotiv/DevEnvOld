@@ -19,7 +19,8 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 import functools
@@ -60,32 +61,20 @@ def SharedYcmd( test ):
   return Wrapper
 
 
-def IsolatedYcmd( custom_options = {} ):
+def IsolatedYcmd( test ):
   """Defines a decorator to be attached to tests of this package. This decorator
   passes a unique ycmd application as a parameter. It should be used on tests
   that change the server state in a irreversible way (ex: a semantic subserver
   is stopped or restarted) or expect a clean state (ex: no semantic subserver
-  started, no .ycm_extra_conf.py loaded, etc). Use the optional parameter
-  |custom_options| to give additional options and/or override the default ones.
+  started, no .ycm_extra_conf.py loaded, etc).
 
-  Do NOT attach it to test generators but directly to the yielded tests.
+  Do NOT attach it to test generators but directly to the yielded tests."""
+  @functools.wraps( test )
+  def Wrapper( *args, **kwargs ):
+    old_server_state = handlers._server_state
 
-  Example usage:
-
-    from ycmd.tests import IsolatedYcmd
-
-    @IsolatedYcmd( { 'auto_trigger': 0 } )
-    def CustomAutoTrigger_test( app ):
-        ...
-  """
-  def Decorator( test ):
-    @functools.wraps( test )
-    def Wrapper( *args, **kwargs ):
-      old_server_state = handlers._server_state
-      app = SetUpApp( custom_options )
-      try:
-        test( app, *args, **kwargs )
-      finally:
-        handlers._server_state = old_server_state
-    return Wrapper
-  return Decorator
+    try:
+      test( SetUpApp(), *args, **kwargs )
+    finally:
+      handlers._server_state = old_server_state
+  return Wrapper

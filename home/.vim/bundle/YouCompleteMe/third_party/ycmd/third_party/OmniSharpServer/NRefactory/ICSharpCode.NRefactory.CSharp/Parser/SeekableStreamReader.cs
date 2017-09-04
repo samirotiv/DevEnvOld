@@ -28,7 +28,7 @@ using ICSharpCode.NRefactory.Editor;
 using System.IO;
 using System.Text;
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	public class SeekableStreamReader : IDisposable
 	{

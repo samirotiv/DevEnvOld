@@ -14,11 +14,11 @@
 
 from __future__ import absolute_import
 
-from .utils import fixture_filepath, py3only, read_file
+from .utils import fixture_filepath, py3only
 from webtest import TestApp
 from jedihttp import handlers
 from nose.tools import ok_
-from hamcrest import ( assert_that, only_contains, contains, contains_string,
+from hamcrest import ( assert_that, only_contains, contains,
                        contains_inanyorder, all_of, is_not, has_key, has_item,
                        has_items, has_entry, has_entries, equal_to, is_, empty )
 
@@ -52,7 +52,7 @@ def test_completion():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'basic.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 7,
       'col': 2,
       'source_path': filepath
@@ -70,7 +70,7 @@ def test_good_gotodefinition():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'goto.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 10,
       'col': 3,
       'source_path': filepath
@@ -112,7 +112,7 @@ def test_bad_gotodefinitions_blank_line():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'goto.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 9,
       'col': 1,
       'source_path': filepath
@@ -126,7 +126,7 @@ def test_bad_gotodefinitions_not_on_valid_position():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'goto.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 100,
       'col': 1,
       'source_path': filepath
@@ -141,7 +141,7 @@ def test_good_gotoassignment():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'goto.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 20,
       'col': 1,
       'source_path': filepath
@@ -159,7 +159,7 @@ def test_good_gotoassignment():
       'column': 0,
       'docstring': '',
       'description': 'inception = _list[ 2 ]',
-      'full_name': 'goto.inception',
+      'full_name': 'goto',
       'is_keyword': False
   } ) )
 
@@ -168,7 +168,7 @@ def test_good_gotoassignment_do_not_follow_imports():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'follow_imports', 'importer.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 3,
       'col': 9,
       'source_path': filepath
@@ -176,12 +176,12 @@ def test_good_gotoassignment_do_not_follow_imports():
   expected_definition = {
       'module_path': filepath,
       'name': 'imported_function',
-      'type': 'function',
+      'type': 'import',
       'in_builtin_module': False,
       'line': 1,
       'column': 21,
-      'docstring': 'imported_function()\n\n',
-      'description': 'def imported_function',
+      'docstring': '',
+      'description': 'from imported import imported_function',
       'full_name': 'imported.imported_function',
       'is_keyword': False
   }
@@ -204,7 +204,7 @@ def test_good_gotoassignment_follow_imports():
   importer_filepath = fixture_filepath( 'follow_imports', 'importer.py' )
   imported_filepath = fixture_filepath( 'follow_imports', 'imported.py' )
   request_data = {
-      'source': read_file( importer_filepath ),
+      'source': open( importer_filepath ).read(),
       'line': 3,
       'col': 9,
       'source_path': importer_filepath,
@@ -232,7 +232,7 @@ def test_usages():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'usages.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 8,
       'col': 5,
       'source_path': filepath
@@ -264,7 +264,7 @@ def test_usages():
           'column': 4,
           'description': 'a = f()',
           'docstring': '',
-          'full_name': 'usages.f',
+          'full_name': 'usages',
           'is_keyword': False
       },
       {
@@ -276,7 +276,7 @@ def test_usages():
           'column': 4,
           'description': 'b = f()',
           'docstring': '',
-          'full_name': 'usages.f',
+          'full_name': 'usages',
           'is_keyword': False
       },
       {
@@ -288,7 +288,7 @@ def test_usages():
           'column': 4,
           'description': 'c = f()',
           'docstring': '',
-          'full_name': 'usages.f',
+          'full_name': 'usages',
           'is_keyword': False
       }
   ) )
@@ -298,7 +298,7 @@ def test_names():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'names.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'path': filepath,
       'all_scopes': False,
       'definitions': True,
@@ -308,19 +308,19 @@ def test_names():
   definitions = app.post_json( '/names', request_data ).json[ 'definitions' ]
 
   assert_that( definitions, contains_inanyorder(
-      has_entries( {
+      {
         'module_path': filepath,
         'name': 'os',
-        'type': 'module',
+        'type': 'import',
         'in_builtin_module': False,
         'line': 1,
         'column': 7,
-        'docstring': contains_string( 'OS routines' ),
-        'description': 'module os',
+        'docstring': '',
+        'description': 'import os',
         'full_name': 'os',
         'is_keyword': False
-      } ),
-      has_entries( {
+      },
+      {
         'module_path': filepath,
         'name': 'CONSTANT',
         'type': 'statement',
@@ -329,10 +329,10 @@ def test_names():
         'column': 0,
         'docstring': '',
         'description': 'CONSTANT = 1',
-        'full_name': 'names.CONSTANT',
+        'full_name': 'names',
         'is_keyword': False
-      } ),
-      has_entries( {
+      },
+      {
         'module_path': filepath,
         'name': 'test',
         'type': 'function',
@@ -343,7 +343,7 @@ def test_names():
         'description': 'def test',
         'full_name': 'names.test',
         'is_keyword': False
-      } )
+      },
   ) )
 
 
@@ -362,7 +362,7 @@ def test_usages_settings_additional_dynamic_modules():
   file2 = fixture_filepath( 'module', 'some_module', 'file2.py' )
   main_file = fixture_filepath( 'module', 'main.py' )
   request_data = {
-      'source': read_file( file2 ),
+      'source': open( file2 ).read(),
       'line': 5,
       'col': 17,
       'source_path': file2,
@@ -419,7 +419,7 @@ def test_py3():
   app = TestApp( handlers.app )
   filepath = fixture_filepath( 'py3.py' )
   request_data = {
-      'source': read_file( filepath ),
+      'source': open( filepath ).read(),
       'line': 19,
       'col': 11,
       'source_path': filepath
@@ -431,20 +431,3 @@ def test_py3():
   assert_that( completions, has_item( CompletionEntry( 'values' ) ) )
   assert_that( completions,
                is_not( has_item( CompletionEntry( 'itervalues' ) ) ) )
-
-
-def test_completion_socket_module():
-  app = TestApp( handlers.app )
-  filepath = fixture_filepath( 'socket_module.py' )
-  request_data = {
-      'source': read_file( filepath ),
-      'line': 4,
-      'col': 4,
-      'source_path': filepath
-  }
-
-  completions = app.post_json( '/completions',
-                                request_data ).json[ 'completions' ]
-
-  assert_that( completions, has_items( CompletionEntry( 'connect' ),
-                                       CompletionEntry( 'connect_ex' ) ) )

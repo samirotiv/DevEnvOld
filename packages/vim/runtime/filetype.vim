@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2017 Aug 11
+" Last Change:	2017 Jun 22
 
 " Listen very carefully, I will say this only once
 if exists("did_load_filetypes")
@@ -635,13 +635,7 @@ au BufNewFile,BufRead dict.conf,.dictrc		setf dictconf
 au BufNewFile,BufRead dictd.conf		setf dictdconf
 
 " Diff files
-au BufNewFile,BufRead *.diff,*.rej		setf diff
-au BufNewFile,BufRead *.patch
-	\ if getline(1) =~ '^From [0-9a-f]\{40\} Mon Sep 17 00:00:00 2001$' |
-	\   setf gitsendemail |
-	\ else |
-	\   setf diff |
-	\ endif
+au BufNewFile,BufRead *.diff,*.rej,*.patch	setf diff
 
 " Dircolors
 au BufNewFile,BufRead .dir_colors,.dircolors,*/etc/DIR_COLORS	setf dircolors
@@ -810,7 +804,6 @@ if !empty($XDG_CONFIG_HOME)
   au BufNewFile,BufRead $XDG_CONFIG_HOME/git/config	setf gitconfig
 endif
 au BufNewFile,BufRead git-rebase-todo		setf gitrebase
-au BufRead,BufNewFile .gitsendemail.msg.??????	setf gitsendemail
 au BufNewFile,BufRead .msg.[0-9]*
       \ if getline(1) =~ '^From.*# This line is ignored.$' |
       \   setf gitsendemail |
@@ -1027,7 +1020,7 @@ au BufNewFile,BufRead *.java,*.jav		setf java
 au BufNewFile,BufRead *.jj,*.jjt		setf javacc
 
 " JavaScript, ECMAScript
-au BufNewFile,BufRead *.js,*.javascript,*.es,*.jsx,*.mjs   setf javascript
+au BufNewFile,BufRead *.js,*.javascript,*.es,*.jsx   setf javascript
 
 " Java Server Pages
 au BufNewFile,BufRead *.jsp			setf jsp
@@ -1341,9 +1334,6 @@ au BufNewFile,BufRead *.mush			setf mush
 
 " Mutt setup file (also for Muttng)
 au BufNewFile,BufRead Mutt{ng,}rc		setf muttrc
-
-" N1QL
-au BufRead,BufNewfile *.n1ql,*.nql		setf n1ql
 
 " Nano
 au BufNewFile,BufRead */etc/nanorc,*.nanorc  	setf nanorc
@@ -2270,8 +2260,6 @@ func! s:FTtex()
     elseif format == 'plaintex'
       let format = 'plain'
     endif
-  elseif expand('%') =~ 'tex/context/.*/.*.tex'
-    let format = 'context'
   else
     " Default value, may be changed later:
     let format = exists("g:tex_flavor") ? g:tex_flavor : 'plain'
@@ -2313,7 +2301,7 @@ func! s:FTtex()
 endfunc
 
 " ConTeXt
-au BufNewFile,BufRead *.mkii,*.mkiv,*.mkvi   setf context
+au BufNewFile,BufRead tex/context/*/*.tex,*.mkii,*.mkiv,*.mkvi   setf context
 
 " Texinfo
 au BufNewFile,BufRead *.texinfo,*.texi,*.txi	setf texinfo

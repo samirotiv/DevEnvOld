@@ -349,8 +349,6 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 						return contextList.Result;
 					}
 					var lookup = new MemberLookup(ctx.CurrentTypeDefinition, Compilation.MainAssembly);
-					var list = typeof(System.Collections.IList).ToTypeReference().Resolve(Compilation);
-					var list1 = typeof(System.Collections.Generic.IList<>).ToTypeReference().Resolve(Compilation);
 					bool isProtectedAllowed = ctx.CurrentTypeDefinition != null && initializerType.GetDefinition() != null ? 
 						ctx.CurrentTypeDefinition.IsDerivedFrom(initializerType.GetDefinition()) : 
 						false;
@@ -366,9 +364,7 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 					}
 
 					foreach (IProperty m in initializerType.GetMembers (m => m.SymbolKind == SymbolKind.Property)) {
-						if (m.CanSet && lookup.IsAccessible(m.Setter, isProtectedAllowed)  || 
-							m.CanGet && lookup.IsAccessible(m.Getter, isProtectedAllowed) && m.ReturnType.GetDefinition() != null && 
-							(m.ReturnType.GetDefinition().IsDerivedFrom(list.GetDefinition()) || m.ReturnType.GetDefinition().IsDerivedFrom(list1.GetDefinition()))) {
+						if (m.CanSet && lookup.IsAccessible(m.Setter, isProtectedAllowed)) {
 							var data = contextList.AddMember(m);
 							if (data != null)
 								data.DisplayFlags |= DisplayFlags.NamedArgument;
@@ -383,9 +379,10 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 					// case 1)
 
 					// check if the object is a list, if not only provide object initalizers
+					var list = typeof(System.Collections.IList).ToTypeReference().Resolve(Compilation);
 					if (initializerType.Kind != TypeKind.Array && list != null) {
 						var def = initializerType.GetDefinition(); 
-						if (def != null && !def.IsDerivedFrom(list.GetDefinition()) && !def.IsDerivedFrom(list1.GetDefinition()))
+						if (def != null && !def.IsDerivedFrom(list.GetDefinition()))
 							return contextList.Result;
 					}
 
@@ -613,7 +610,7 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 			if (invokeResult == null)
 				return Enumerable.Empty<ICompletionData>();
 			if (invokeResult.Member.Name == "ToString")
-				return GetFormatCompletionData(invokeResult.Member.DeclaringType ?? SpecialType.UnknownType) ?? Enumerable.Empty<ICompletionData>();
+				return GetFormatCompletionData(invokeResult.Member.DeclaringType) ?? Enumerable.Empty<ICompletionData>();
 			return Enumerable.Empty<ICompletionData>();
 		}
 
@@ -886,7 +883,7 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 									string parameterDefinition = AddDelegateHandlers(
 										wrapper,
 										delegateType,
-										optDelegateName: GuessEventHandlerMethodName(curTokenIndex, (currentType == null) ? null : currentType.Name)
+										optDelegateName: GuessEventHandlerMethodName(curTokenIndex)
 									);
 								}
 
@@ -1942,13 +1939,14 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 					if (!lookup.IsAccessible(type, false))
 						continue;
 					IType addType = typePred != null ? typePred(type) : type;
+
 					if (onlyAddConstructors && addType != null) {
 						if (!addType.GetConstructors().Any(c => lookup.IsAccessible(c, true)))
 							continue;
 					}
 
 					if (addType != null) {
-						var a2 = onlyAddConstructors ? wrapper.AddConstructors(addType, false, IsAttributeContext(node)) : wrapper.AddType(addType, false, IsAttributeContext(node));
+						var a2 = onlyAddConstructors ? wrapper.AddConstructors(addType, false, IsAttributeContext(node)) : wrapper.AddType(addType, false);
 						if (a2 != null && callback != null) {
 							callback(a2, type);
 						}
@@ -2125,14 +2123,8 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 						if (parent is VariableInitializer) {
 							parent = parent.Parent;
 						}
-						var varDecl = parent as VariableDeclarationStatement;
-						if (varDecl != null) {
-							ExpressionResolveResult resolved;
-							if (varDecl.Type.IsVar()) {
-								resolved = null;
-							} else {
-								resolved = ResolveExpression(parent);
-							}
+						if (parent is VariableDeclarationStatement) {
+							var resolved = ResolveExpression(parent);
 							if (resolved != null) {
 								isAsType = resolved.Result.Type;
 							}
@@ -2589,49 +2581,10 @@ namespace ICSharpCode.NRefactory.CSharp.Completion
 			}
 		}
 
-		public string GuessEventHandlerMethodName(int tokenIndex, string surroundingTypeName)
+		public string GuessEventHandlerMethodName(int tokenIndex)
 		{
-			var names = new List<string>();
-			
-			string eventName = GetPreviousToken(ref tokenIndex, false);
 			string result = GetPreviousToken(ref tokenIndex, false);
-			if (result != ".") {
-				if (surroundingTypeName == null) {
-					eventName = "Handle" + eventName;
-				} else {
-					names.Add(surroundingTypeName);
-				}
-			}
-			while (result == ".") {
-				result = GetPreviousToken(ref tokenIndex, false);
-				if (result == "this") {
-					if (names.Count == 0) {
-						if (surroundingTypeName == null) {
-							eventName = "Handle" + eventName;
-						} else {
-							names.Add(surroundingTypeName);
-						}
-					}
-				} else if (result != null) {
-					string trimmedName = result.Trim();
-					if (trimmedName.Length == 0) {
-						break;
-					}
-					names.Insert(0, trimmedName);
-				}
-				result = GetPreviousToken(ref tokenIndex, false);
-			}
-			if (!string.IsNullOrEmpty(eventName)) {
-				names.Add(eventName);
-			}
-			result = String.Join("_", names.ToArray());
-			foreach (char ch in result) {
-				if (!char.IsLetterOrDigit(ch) && ch != '_') {
-					result = "";
-					break;
-				}
-			}
-			return result;
+			return "Handle" + result;
 		}
 
 		bool MatchDelegate(IType delegateType, IMethod method)

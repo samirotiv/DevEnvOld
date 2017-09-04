@@ -27,7 +27,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 	public class VarianceDecl
 	{
 		public VarianceDecl (Variance variance, Location loc)
@@ -106,7 +106,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			throw new NotImplementedException ();
 		}
 
-		public override FullNamedExpression ResolveAsTypeOrNamespace (IMemberContext mc, bool allowUnboundTypeArguments)
+		public override FullNamedExpression ResolveAsTypeOrNamespace (IMemberContext ec)
 		{
 			throw new NotImplementedException ();
 		}
@@ -268,7 +268,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					iface_found = true;
 					continue;
 				}
-					
+
+
 				var constraint_tp = type as TypeParameterSpec;
 				if (constraint_tp != null) {
 					if (tparam_types == null) {
@@ -317,12 +318,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 									break;
 							}
 						}
-					}
-
-					if (constraint_tp.TypeArguments != null) {
-						var eb = constraint_tp.GetEffectiveBase ();
-						if (eb != null && !CheckConflictingInheritedConstraint (spec, eb, spec.BaseType, context, constraint.Location))
-							break;
 					}
 
 					if (constraint_tp.HasSpecialStruct) {
@@ -626,11 +621,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			spec.SetMetaInfo (type);
 		}
 
-		public void Define (TypeParameter tp)
-		{
-			builder = tp.builder;
-		}
-
 		public void EmitConstraints (GenericTypeParameterBuilder builder)
 		{
 			var attr = GenericParameterAttributes.None;
@@ -780,7 +770,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		int tp_pos;
 		TypeSpec[] targs;
 		TypeSpec[] ifaces_defined;
-		TypeSpec effective_base;
 
 		//
 		// Creates type owned type parameter
@@ -1044,35 +1033,27 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				return BaseType.IsStruct ? BaseType.BaseType : BaseType;
 			}
 
-			if (effective_base != null)
-				return effective_base;
+			var types = targs;
+			if (HasTypeConstraint) {
+				Array.Resize (ref types, types.Length + 1);
 
-			var types = new TypeSpec [HasTypeConstraint ? targs.Length + 1 : targs.Length];
-
-			for (int i = 0; i < targs.Length; ++i) {
-				var t = targs [i];
-
-				// Same issue as above, inherited constraints can be of struct type
-				if (t.IsStruct) {
-					types [i] = t.BaseType;
-					continue;
+				for (int i = 0; i < types.Length - 1; ++i) {
+					types[i] = types[i].BaseType;
 				}
 
-				var tps = t as TypeParameterSpec;
-				types [i] = tps != null ? tps.GetEffectiveBase () : t;
+				types[types.Length - 1] = BaseType;
+			} else {
+				types = types.Select (l => l.BaseType).ToArray ();
 			}
 
-			if (HasTypeConstraint)
-				types [types.Length - 1] = BaseType;
+			if (types != null)
+				return Convert.FindMostEncompassedType (types);
 
-			return effective_base = Convert.FindMostEncompassedType (types);
+			return BaseType;
 		}
 
-		public override string GetSignatureForDocumentation (bool explicitName)
+		public override string GetSignatureForDocumentation ()
 		{
-			if (explicitName)
-				return Name;
-
 			var prefix = IsMethodOwned ? "``" : "`";
 			return prefix + DeclaredPosition;
 		}
@@ -1156,7 +1137,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 					if (other.targs != null) {
 						foreach (var otarg in other.targs) {
-							if (TypeSpecComparer.Override.IsEqual (iface, otarg)) {
+							if (TypeSpecComparer.Override.IsEqual (BaseType, otarg)) {
 								found = true;
 								break;
 							}
@@ -1332,23 +1313,12 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 			if (targs != null) {
 				foreach (var ta in targs) {
-					var tps = ta as TypeParameterSpec;
-					IList<TypeSpec> ifaces;
-					TypeSpec b_type;
-					if (tps != null) {
-						b_type = tps.GetEffectiveBase ();
-						ifaces = tps.InterfacesDefined;
-					} else {
-						b_type = ta;
-						ifaces = ta.Interfaces;
-					}
-
-					//
-					// Don't add base type which was inflated from base constraints but it's not valid
-					// in C# context
-					//
-					if (b_type != null && b_type.BuiltinType != BuiltinTypeSpec.Type.Object && b_type.BuiltinType != BuiltinTypeSpec.Type.ValueType && !b_type.IsStructOrEnum)
+					var b_type = ta.BaseType;
+					if (b_type.BuiltinType != BuiltinTypeSpec.Type.Object && b_type.BuiltinType != BuiltinTypeSpec.Type.ValueType)
 						cache.AddBaseType (b_type);
+
+					var tps = ta as TypeParameterSpec;
+					var ifaces = tps != null ? tps.InterfacesDefined : ta.Interfaces;
 
 					if (ifaces != null) {
 						foreach (var iface_type in ifaces) {
@@ -1370,15 +1340,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 			if (TypeArguments != null) {
 				foreach (var t in TypeArguments) {
-					var tps = t as TypeParameterSpec;
-					if (tps != null) {
-						if (tps.IsConvertibleToInterface (iface))
-							return true;
-
-						continue;
-					}
-
-					if (t.ImplementsInterface (iface, false))
+					if (((TypeParameterSpec) t).IsConvertibleToInterface (iface))
 						return true;
 				}
 			}
@@ -1486,21 +1448,13 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			if (tp != null)
 				return Inflate (tp);
 
-			var ec = type as ElementTypeSpec;
-			if (ec != null) {
-				var et = Inflate (ec.Element);
-				if (et != ec.Element) {
-					var ac = ec as ArrayContainer;
-					if (ac != null)
-						return ArrayContainer.MakeType (context.Module, et, ac.Rank);
+			var ac = type as ArrayContainer;
+			if (ac != null) {
+				var et = Inflate (ac.Element);
+				if (et != ac.Element)
+					return ArrayContainer.MakeType (context.Module, et, ac.Rank);
 
-					if (ec is PointerContainer)
-						return PointerContainer.MakeType (context.Module, et);
-
-					throw new NotImplementedException ();
-				}
-
-				return ec;
+				return ac;
 			}
 
 			if (type.Kind == MemberKind.MissingType)
@@ -2199,7 +2153,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		/// <summary>
 		///   Resolve the type arguments.
 		/// </summary>
-		public virtual bool Resolve (IMemberContext ec, bool allowUnbound)
+		public virtual bool Resolve (IMemberContext ec)
 		{
 			if (atypes != null)
 			    return true;
@@ -2208,8 +2162,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			bool ok = true;
 
 			atypes = new TypeSpec [count];
-
-			var errors = ec.Module.Compiler.Report.Errors;
 
 			for (int i = 0; i < count; i++){
 				var te = args[i].ResolveAsType (ec);
@@ -2234,7 +2186,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				}
 			}
 
-			if (!ok || errors != ec.Module.Compiler.Report.Errors)
+			if (!ok)
 				atypes = null;
 
 			return ok;
@@ -2252,12 +2204,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 	public class UnboundTypeArguments : TypeArguments
 	{
-		Location loc;
-
-		public UnboundTypeArguments (int arity, Location loc)
+		public UnboundTypeArguments (int arity)
 			: base (new FullNamedExpression[arity])
 		{
-			this.loc = loc;
 		}
 
 		public override bool IsEmpty {
@@ -2266,12 +2215,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			}
 		}
 
-		public override bool Resolve (IMemberContext mc, bool allowUnbound)
+		public override bool Resolve (IMemberContext ec)
 		{
-			if (!allowUnbound) {
-				mc.Module.Compiler.Report.Error (7003, loc, "Unbound generic name is not valid in this context");
-			}
-
 			// Nothing to be resolved
 			return true;
 		}
@@ -2452,17 +2397,15 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			return type.GetSignatureForError ();
 		}
 
-		public override TypeSpec ResolveAsType (IMemberContext mc, bool allowUnboundTypeArguments = false)
+		public override TypeSpec ResolveAsType (IMemberContext mc)
 		{
 			if (eclass != ExprClass.Unresolved)
 				return type;
 
-			if (!args.Resolve (mc, allowUnboundTypeArguments))
+			if (!args.Resolve (mc))
 				return null;
 
 			TypeSpec[] atypes = args.Arguments;
-			if (atypes == null)
-				return null;
 
 			//
 			// Now bind the parameters
@@ -2784,7 +2727,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 		//
 		// Tracks successful rate of type inference
 		//
-		int score;
+		int score = int.MaxValue;
 		readonly Arguments arguments;
 		readonly int arg_count;
 
@@ -2857,12 +2800,12 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 				AnonymousMethodExpression am = a.Expr as AnonymousMethodExpression;
 				if (am != null) {
 					if (am.ExplicitTypeInference (tic, method_parameter))
-						++score; 
+						--score; 
 					continue;
 				}
 
 				if (a.IsByRef) {
-					score += tic.ExactInference (a.Type, method_parameter);
+					score -= tic.ExactInference (a.Type, method_parameter);
 					continue;
 				}
 
@@ -2870,14 +2813,14 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					continue;
 
 				if (TypeSpec.IsValueType (method_parameter)) {
-					score += tic.LowerBoundInference (a.Type, method_parameter);
+					score -= tic.LowerBoundInference (a.Type, method_parameter);
 					continue;
 				}
 
 				//
 				// Otherwise an output type inference is made
 				//
-				score += tic.OutputTypeInference (ec, a.Expr, method_parameter);
+				score -= tic.OutputTypeInference (ec, a.Expr, method_parameter);
 			}
 
 			//
@@ -2927,7 +2870,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					if (arguments[i] == null)
 						continue;
 
-					score += tic.OutputTypeInference (ec, arguments[i].Expr, t_i);
+					score -= tic.OutputTypeInference (ec, arguments[i].Expr, t_i);
 				}
 			}
 
@@ -3034,7 +2977,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			// Some types cannot be used as type arguments
 			//
 			if ((bound.Type.Kind == MemberKind.Void && !voidAllowed) || bound.Type.IsPointer || bound.Type.IsSpecialRuntimeType ||
-				bound.Type == InternalType.MethodGroup || bound.Type == InternalType.AnonymousMethod || bound.Type == InternalType.VarOutType)
+				bound.Type == InternalType.MethodGroup || bound.Type == InternalType.AnonymousMethod)
 				return;
 
 			var a = bounds [index];
@@ -3060,8 +3003,8 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					continue;
 				}
 
-				if (t.IsGeneric && !AllTypesAreFixed (t.TypeArguments))
-					return false;
+				if (TypeManager.IsGenericType (t))
+					return AllTypesAreFixed (TypeManager.GetTypeArguments (t));
 			}
 			
 			return true;

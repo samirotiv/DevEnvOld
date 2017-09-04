@@ -22,7 +22,7 @@ using MetaType = System.Type;
 using System.Reflection;
 #endif
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	//
 	// Inflated or non-inflated representation of any type. 
@@ -295,12 +295,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			}
 		}
 
-		public bool IsStructOrEnum {
-			get {
-				return (Kind & (MemberKind.Struct | MemberKind.Enum)) != 0;
-			}
-		}
-
 		public bool IsTypeBuilder {
 			get {
 #if STATIC
@@ -490,22 +484,17 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		//
 		// Text representation of type used by documentation writer
 		//
-		public sealed override string GetSignatureForDocumentation ()
-		{
-			return GetSignatureForDocumentation (false);
-		}
-
-		public virtual string GetSignatureForDocumentation (bool explicitName)
+		public override string GetSignatureForDocumentation ()
 		{
 			StringBuilder sb = new StringBuilder ();
 			if (IsNested) {
-				sb.Append (DeclaringType.GetSignatureForDocumentation (explicitName));
-			} else if (MemberDefinition.Namespace != null) {
-				sb.Append (explicitName ? MemberDefinition.Namespace.Replace ('.', '#') : MemberDefinition.Namespace);
+				sb.Append (DeclaringType.GetSignatureForDocumentation ());
+			} else {
+				sb.Append (MemberDefinition.Namespace);
 			}
 
 			if (sb.Length != 0)
-				sb.Append (explicitName ? "#" : ".");
+				sb.Append (".");
 
 			sb.Append (Name);
 			if (Arity > 0) {
@@ -515,13 +504,40 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 				        if (i > 0)
 				            sb.Append (",");
 
-						sb.Append (TypeArguments[i].GetSignatureForDocumentation (explicitName));
+				        sb.Append (TypeArguments[i].GetSignatureForDocumentation ());
 				    }
 				    sb.Append ("}");
 				} else {
 					sb.Append ("`");
 					sb.Append (Arity.ToString ());
 				}
+			}
+
+			return sb.ToString ();
+		}
+
+		public string GetExplicitNameSignatureForDocumentation ()
+		{
+			StringBuilder sb = new StringBuilder ();
+			if (IsNested) {
+				sb.Append (DeclaringType.GetExplicitNameSignatureForDocumentation ());
+			} else if (MemberDefinition.Namespace != null) {
+				sb.Append (MemberDefinition.Namespace.Replace ('.', '#'));
+			}
+
+			if (sb.Length != 0)
+				sb.Append ("#");
+
+			sb.Append (Name);
+			if (Arity > 0) {
+				sb.Append ("{");
+				for (int i = 0; i < Arity; ++i) {
+					if (i > 0)
+						sb.Append (",");
+
+					sb.Append (TypeArguments[i].GetExplicitNameSignatureForDocumentation ());
+				}
+				sb.Append ("}");
 			}
 
 			return sb.ToString ();
@@ -629,7 +645,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			case MemberKind.Struct:
 			case MemberKind.Enum:
 			case MemberKind.Void:
-			case MemberKind.PointerType:
 				return false;
 			case MemberKind.InternalCompilerType:
 				//
@@ -1424,7 +1439,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 		public static readonly InternalType FakeInternalType = new InternalType ("<fake$type>");
 		public static readonly InternalType Namespace = new InternalType ("<namespace>");
 		public static readonly InternalType ErrorType = new InternalType ("<error>");
-		public static readonly InternalType VarOutType = new InternalType ("var out");
 
 		readonly string name;
 
@@ -1637,9 +1651,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			return null;
 		}
 
-		public override string GetSignatureForDocumentation (bool explicitName)
+		public override string GetSignatureForDocumentation ()
 		{
-			return Element.GetSignatureForDocumentation (explicitName) + GetPostfixSignature ();
+			return Element.GetSignatureForDocumentation () + GetPostfixSignature ();
 		}
 
 		public override string GetSignatureForError ()
@@ -1872,33 +1886,29 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			return sb.ToString ();
 		}
 
-		public override string GetSignatureForDocumentation (bool explicitName)
+		public override string GetSignatureForDocumentation ()
 		{
 			StringBuilder sb = new StringBuilder ();
-			GetElementSignatureForDocumentation (sb, explicitName);
+			GetElementSignatureForDocumentation (sb);
 			return sb.ToString ();
 		}
 
-		void GetElementSignatureForDocumentation (StringBuilder sb, bool explicitName)
+		void GetElementSignatureForDocumentation (StringBuilder sb)
 		{
 			var ac = Element as ArrayContainer;
 			if (ac == null)
-				sb.Append (Element.GetSignatureForDocumentation (explicitName));
+				sb.Append (Element.GetSignatureForDocumentation ());
 			else
-				ac.GetElementSignatureForDocumentation (sb, explicitName);
+				ac.GetElementSignatureForDocumentation (sb);
 
-			if (explicitName) {
-				sb.Append (GetPostfixSignature (rank));
-			} else {
-				sb.Append ("[");
-				for (int i = 1; i < rank; i++) {
-					if (i == 1)
-						sb.Append ("0:");
+			sb.Append ("[");
+			for (int i = 1; i < rank; i++) {
+				if (i == 1)
+					sb.Append ("0:");
 
-					sb.Append (",0:");
-				}
-				sb.Append ("]");
+				sb.Append (",0:");
 			}
+			sb.Append ("]");
 		}
 
 		public static ArrayContainer MakeType (ModuleContainer module, TypeSpec element)
@@ -1919,11 +1929,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			}
 
 			return ac;
-		}
-
-		public override List<MissingTypeSpecReference> ResolveMissingDependencies (MemberSpec caller)
-		{
-			return Element.ResolveMissingDependencies (caller);
 		}
 	}
 

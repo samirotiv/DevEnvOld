@@ -1,40 +1,47 @@
 .. _install:
 
-Installation of Requests
-========================
+Installation
+============
 
 This part of the documentation covers the installation of Requests.
 The first step to using any software package is getting it properly installed.
 
 
-$ pipenv install requests
--------------------------
+Distribute & Pip
+----------------
 
-To install Requests, simply run this simple command in your terminal of choice::
+Installing Requests is simple with `pip <https://pip.pypa.io>`_, just run
+this in your terminal::
 
-    $ pipenv install requests
+    $ pip install requests
 
-If you don't have `pipenv <http://pipenv.org/>`_ installed (tisk tisk!), head over to the Pipenv website for installation instructions. Or, if you prefer to just use pip and don't have it installed,
-`this Python installation guide <http://docs.python-guide.org/en/latest/starting/installation/>`_
-can guide you through the process.
+or, with `easy_install <http://pypi.python.org/pypi/setuptools>`_::
 
-Get the Source Code
--------------------
+    $ easy_install requests
+
+But, you really `shouldn't do that <https://stackoverflow.com/questions/3220404/why-use-pip-over-easy-install>`_.
+
+
+Get the Code
+------------
 
 Requests is actively developed on GitHub, where the code is
-`always available <https://github.com/requests/requests>`_.
+`always available <https://github.com/kennethreitz/requests>`_.
 
 You can either clone the public repository::
 
-    $ git clone git://github.com/requests/requests.git
+    $ git clone git://github.com/kennethreitz/requests.git
 
-Or, download the `tarball <https://github.com/requests/requests/tarball/master>`_::
+Download the `tarball <https://github.com/kennethreitz/requests/tarball/master>`_::
 
-    $ curl -OL https://github.com/requests/requests/tarball/master
-    # optionally, zipball is also available (for Windows users).
+    $ curl -OL https://github.com/kennethreitz/requests/tarball/master
 
-Once you have a copy of the source, you can embed it in your own Python
-package, or install it into your site-packages easily::
+Or, download the `zipball <https://github.com/kennethreitz/requests/zipball/master>`_::
 
-    $ cd requests
-    $ pip install .
+    $ curl -OL https://github.com/kennethreitz/requests/zipball/master
+
+
+Once you have a copy of the source, you can embed it in your Python package,
+or install it into your site-packages easily::
+
+    $ python setup.py install

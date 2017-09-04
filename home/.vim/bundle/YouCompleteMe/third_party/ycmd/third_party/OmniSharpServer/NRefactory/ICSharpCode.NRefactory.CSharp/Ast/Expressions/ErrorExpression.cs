@@ -106,19 +106,21 @@ namespace ICSharpCode.NRefactory.CSharp
 
 		public override void AcceptVisitor (IAstVisitor visitor)
 		{
-			visitor.VisitErrorNode(this);
+			// nothing
 		}
 			
 		public override T AcceptVisitor<T> (IAstVisitor<T> visitor)
 		{
-			return visitor.VisitErrorNode(this);
+			// nothing
+			return default (T);
 		}
-
+		
 		public override S AcceptVisitor<T, S> (IAstVisitor<T, S> visitor, T data)
 		{
-			return visitor.VisitErrorNode(this, data);
+			// nothing
+			return default(S);
 		}
-
+		
 		protected internal override bool DoMatch (AstNode other, PatternMatching.Match match)
 		{
 			var o = other as ErrorExpression;

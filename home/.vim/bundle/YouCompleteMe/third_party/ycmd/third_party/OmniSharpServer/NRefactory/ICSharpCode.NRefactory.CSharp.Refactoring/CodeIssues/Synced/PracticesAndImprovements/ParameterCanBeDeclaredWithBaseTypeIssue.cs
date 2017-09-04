@@ -356,7 +356,7 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 			if (localResolveResult == null)
 				return;
 			var resolveResult = context.Resolve(indexerExpression);
-			if (resolveResult == null)
+			if (localResolveResult == null)
 				return;
 			var parent = indexerExpression.Parent;
 			while (parent is ParenthesizedExpression)

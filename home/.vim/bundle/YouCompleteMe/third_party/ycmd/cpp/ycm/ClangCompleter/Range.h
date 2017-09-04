@@ -18,6 +18,7 @@
 #ifndef RANGE_H_4MFTIGQK
 #define RANGE_H_4MFTIGQK
 
+#include "standard.h"
 #include "Location.h"
 
 namespace YouCompleteMe {

@@ -3,17 +3,13 @@
 
 import unittest
 import sys
-
-import itertools
-
 import bottle
-from bottle import request, tob, touni, tonat, json_dumps, HTTPError, parse_date
-from test import tools
+from bottle import request, tob, touni, tonat, json_dumps, _e, HTTPError, parse_date
+import tools
 import wsgiref.util
 import base64
 
 from bottle import BaseRequest, BaseResponse, LocalRequest
-
 
 class TestRequest(unittest.TestCase):
 
@@ -398,14 +394,6 @@ class TestRequest(unittest.TestCase):
         e['CONTENT_LENGTH'] = str(len(json_dumps(test)))
         self.assertEqual(BaseRequest(e).json, None)
 
-    def test_json_header_empty_body(self):
-        """Request Content-Type is application/json but body is empty"""
-        e = {'CONTENT_TYPE': 'application/json'}
-        wsgiref.util.setup_testing_defaults(e)
-        wsgiref.util.setup_testing_defaults(e)
-        e['CONTENT_LENGTH'] = "0"
-        self.assertEqual(BaseRequest(e).json, None)
-
     def test_isajax(self):
         e = {}
         wsgiref.util.setup_testing_defaults(e)
@@ -456,11 +444,9 @@ class TestRequest(unittest.TestCase):
             self.assertEqual(r.foo, 'somevalue')
             self.assertTrue('somevalue' in r.environ.values())
 
-            # Attributes are read-only once set.
-            self.assertRaises(AttributeError, setattr, r, 'foo', 'x')
-
             # Unknown attributes raise AttributeError.
             self.assertRaises(AttributeError, getattr, r, 'somevalue')
+
 
 
 class TestResponse(unittest.TestCase):
@@ -489,24 +475,15 @@ class TestResponse(unittest.TestCase):
         from functools import partial
         make_res = partial(BaseResponse, '', 200)
 
-        self.assertEquals('yay', make_res(x_test='yay')['x-test'])
+        self.assertTrue('yay',
+            make_res([('x-test','yay')])['x-test'])
 
-    def test_wsgi_header_values(self):
-        def cmp(app, wire):
-            rs = BaseResponse()
-            rs.set_header('x-test', app)
-            result = [v for (h, v) in rs.headerlist if h.lower()=='x-test'][0]
-            self.assertEquals(wire, result)
+    def test_constructor_headerlist(self):
+        from functools import partial
+        make_res = partial(BaseResponse, '', 200)
 
-        if bottle.py3k:
-            cmp(1, tonat('1', 'latin1'))
-            cmp('öäü', 'öäü'.encode('utf8').decode('latin1'))
-            # Dropped byte header support in Python 3:
-            #cmp(tob('äöü'), 'äöü'.encode('utf8').decode('latin1'))
-        else:
-            cmp(1, '1')
-            cmp('öäü', 'öäü')
-            cmp(touni('äöü'), 'äöü')
+        self.assertTrue('yay', make_res(x_test='yay')['x-test'])
+
 
     def test_set_status(self):
         rs = BaseResponse()
@@ -600,14 +577,6 @@ class TestResponse(unittest.TestCase):
         self.assertEqual(cookies[0], 'name1=value; Max-Age=5')
         self.assertEqual(cookies[1], 'name2="value 2"; Path=/foo')
 
-    def test_set_cookie_value_long_string(self):
-        r = BaseResponse()
-        self.assertRaises(ValueError, r.set_cookie, name='test', value='x' * 4097)
-
-    def test_set_cookie_name_long_string(self):
-        r = BaseResponse()
-        self.assertRaises(ValueError, r.set_cookie, name='x' * 4097, value='simple_value')
-
     def test_set_cookie_maxage(self):
         import datetime
         r = BaseResponse()
@@ -628,33 +597,13 @@ class TestResponse(unittest.TestCase):
         self.assertEqual(cookies[0], 'name1=value; expires=Thu, 01 Jan 1970 00:00:42 GMT')
         self.assertEqual(cookies[1], 'name2=value; expires=Thu, 01 Jan 1970 00:00:43 GMT')
 
-    def test_set_cookie_secure(self):
-        r = BaseResponse()
-        r.set_cookie('name1', 'value', secure=True)
-        r.set_cookie('name2', 'value', secure=False)
-        cookies = sorted([value for name, value in r.headerlist
-                   if name.title() == 'Set-Cookie'])
-        self.assertEqual(cookies[0].lower(), 'name1=value; secure')
-        self.assertEqual(cookies[1], 'name2=value')
-
-    def test_set_cookie_httponly(self):
-        if sys.version_info < (2,6,0):
-            return
-        r = BaseResponse()
-        r.set_cookie('name1', 'value', httponly=True)
-        r.set_cookie('name2', 'value', httponly=False)
-        cookies = sorted([value for name, value in r.headerlist
-                   if name.title() == 'Set-Cookie'])
-        self.assertEqual(cookies[0].lower(), 'name1=value; httponly')
-        self.assertEqual(cookies[1], 'name2=value')
-
     def test_delete_cookie(self):
         response = BaseResponse()
         response.set_cookie('name', 'value')
         response.delete_cookie('name')
         cookies = [value for name, value in response.headerlist
                    if name.title() == 'Set-Cookie']
-        self.assertTrue('Max-Age=-1' in cookies[0])
+        self.assertTrue('name=;' in cookies[0])
 
     def test_set_header(self):
         response = BaseResponse()
@@ -696,52 +645,27 @@ class TestResponse(unittest.TestCase):
         response['x-test'] = 5
         self.assertEqual('5', response['x-test'])
         response['x-test'] = None
-        self.assertEqual('', response['x-test'])
-        response['x-test'] = touni('瓶')
-        self.assertEqual(tonat(touni('瓶')), response['x-test'])
-
-    def test_prevent_control_characters_in_headers(self):
-        masks = '{}test', 'test{}', 'te{}st'
-        tests = '\n', '\r', '\n\r', '\0'
-
-        # Test HeaderDict
-        apis = 'append', 'replace', '__setitem__', 'setdefault'
-        for api, mask, test in itertools.product(apis, masks, tests):
-            hd = bottle.HeaderDict()
-            func = getattr(hd, api)
-            value = mask.replace("{}", test)
-            self.assertRaises(ValueError, func, value, "test-value")
-            self.assertRaises(ValueError, func, "test-name", value)
-
-        # Test functions on BaseResponse
-        apis = 'add_header', 'set_header', '__setitem__'
-        for api, mask, test in itertools.product(apis, masks, tests):
-            rs = bottle.BaseResponse()
-            func = getattr(rs, api)
-            value = mask.replace("{}", test)
-            self.assertRaises(ValueError, func, value, "test-value")
-            self.assertRaises(ValueError, func, "test-name", value)
+        self.assertEqual('None', response['x-test'])
 
     def test_expires_header(self):
         import datetime
         response = BaseResponse()
         now = datetime.datetime.now()
         response.expires = now
-
+        
         def seconds(a, b):
             td = max(a,b) - min(a,b)
             return td.days*360*24 + td.seconds
-
+        
         self.assertEqual(0, seconds(response.expires, now))
         now2 = datetime.datetime.utcfromtimestamp(
             parse_date(response.headers['Expires']))
         self.assertEqual(0, seconds(now, now2))
 
-
 class TestRedirect(unittest.TestCase):
 
     def assertRedirect(self, target, result, query=None, status=303, **args):
-        env = {'SERVER_PROTOCOL': 'HTTP/1.1'}
+        env = {'SERVER_PROTOCOL':'HTTP/1.1'}
         for key in list(args):
             if key.startswith('wsgi'):
                 args[key.replace('_', '.', 1)] = args[key]
@@ -751,10 +675,11 @@ class TestRedirect(unittest.TestCase):
         bottle.response.bind()
         try:
             bottle.redirect(target, **(query or {}))
-        except bottle.HTTPResponse as E:
-            self.assertEqual(status, E.status_code)
-            self.assertTrue(E.headers)
-            self.assertEqual(result, E.headers['Location'])
+        except bottle.HTTPResponse:
+            r = _e()
+            self.assertEqual(status, r.status_code)
+            self.assertTrue(r.headers)
+            self.assertEqual(result, r.headers['Location'])
 
     def test_absolute_path(self):
         self.assertRedirect('/', 'http://127.0.0.1/')
@@ -841,8 +766,8 @@ class TestRedirect(unittest.TestCase):
         try:
             bottle.response.set_cookie('xxx', 'yyy')
             bottle.redirect('...')
-        except bottle.HTTPResponse as E:
-            h = [v for (k, v) in E.headerlist if k == 'Set-Cookie']
+        except bottle.HTTPResponse:
+            h = [v for (k, v) in _e().headerlist if k == 'Set-Cookie']
             self.assertEqual(h, ['xxx=yyy'])
 
 class TestWSGIHeaderDict(unittest.TestCase):
@@ -876,3 +801,8 @@ class TestWSGIHeaderDict(unittest.TestCase):
             self.assertTrue(key in self.headers)
             self.assertEqual(self.headers.get(key), 'test')
             self.assertEqual(self.headers.get(key, 5), 'test')
+
+
+
+if __name__ == '__main__': #pragma: no cover
+    unittest.main()

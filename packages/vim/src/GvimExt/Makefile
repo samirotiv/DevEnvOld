@@ -36,16 +36,8 @@ CPU = i386
 
 !ifdef SDK_INCLUDE_DIR
 !include $(SDK_INCLUDE_DIR)\Win32.mak
-!elseif "$(USE_WIN32MAK)"=="yes"
-!include <Win32.mak>
 !else
-cc = cl
-link = link
-rc = rc
-cflags = -nologo -c
-lflags = -incremental:no -nologo
-rcflags = /r
-olelibsdll = ole32.lib uuid.lib oleaut32.lib user32.lib gdi32.lib advapi32.lib
+!include <Win32.mak>
 !endif
 
 # include CPUARG

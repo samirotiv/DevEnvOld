@@ -17,12 +17,11 @@
 
 #include "TranslationUnit.h"
 #include "CompletionData.h"
+#include "standard.h"
 #include "exceptions.h"
 #include "ClangUtils.h"
 #include "ClangHelpers.h"
 
-#include <cstdlib>
-#include <algorithm>
 #include <memory>
 
 using std::unique_lock;
@@ -105,7 +104,7 @@ TranslationUnit::TranslationUnit(
                          &clang_translation_unit_ );
 
   if ( result != CXError_Success )
-    throw( ClangParseError() );
+    boost_throw( ClangParseError() );
 }
 
 
@@ -346,7 +345,7 @@ void TranslationUnit::Reparse(
 // non-const pointer to clang. This function (and clang too) will not modify the
 // param though.
 void TranslationUnit::Reparse( std::vector< CXUnsavedFile > &unsaved_files,
-                               size_t parse_options ) {
+                               uint parse_options ) {
   int failure = 0;
   {
     unique_lock< mutex > lock( clang_access_mutex_ );
@@ -365,7 +364,7 @@ void TranslationUnit::Reparse( std::vector< CXUnsavedFile > &unsaved_files,
 
   if ( failure ) {
     Destroy();
-    throw( ClangParseError() );
+    boost_throw( ClangParseError() );
   }
 
   UpdateLatestDiagnostics();
@@ -376,10 +375,10 @@ void TranslationUnit::UpdateLatestDiagnostics() {
   unique_lock< mutex > lock2( diagnostics_mutex_ );
 
   latest_diagnostics_.clear();
-  size_t num_diagnostics = clang_getNumDiagnostics( clang_translation_unit_ );
+  uint num_diagnostics = clang_getNumDiagnostics( clang_translation_unit_ );
   latest_diagnostics_.reserve( num_diagnostics );
 
-  for ( size_t i = 0; i < num_diagnostics; ++i ) {
+  for ( uint i = 0; i < num_diagnostics; ++i ) {
     Diagnostic diagnostic =
       BuildDiagnostic(
         DiagnosticWrap( clang_getDiagnostic( clang_translation_unit_, i ),
@@ -427,7 +426,7 @@ std::vector< FixIt > TranslationUnit::GetFixItsForLocationInFile(
 
     for ( const Diagnostic& diagnostic : latest_diagnostics_ ) {
       // Find all diagnostics for the supplied line which have FixIts attached
-      if ( diagnostic.location_.line_number_ == static_cast< size_t >( line ) ) {
+      if ( diagnostic.location_.line_number_ == static_cast< uint >( line ) ) {
         fixits.insert( fixits.end(),
                        diagnostic.fixits_.begin(),
                        diagnostic.fixits_.end() );

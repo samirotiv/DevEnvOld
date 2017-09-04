@@ -2,10 +2,10 @@
 Tests of ``jedi.api.Interpreter``.
 """
 
+from ..helpers import TestCase
 import jedi
 from jedi._compatibility import is_py33
 from jedi.evaluate.compiled import mixed
-
 
 class _GlobalNameSpace():
     class SideEffectContainer():
@@ -40,36 +40,6 @@ def test_builtin_details():
     assert m.type == 'module'
 
 
-def test_numpy_like_non_zero():
-    """
-    Numpy-like array can't be caster to bool and need to be compacre with
-    `is`/`is not` and not `==`/`!=`
-    """
-
-    class NumpyNonZero:
-
-        def __zero__(self):
-            raise ValueError('Numpy arrays would raise and tell you to use .any() or all()')
-        def __bool__(self):
-            raise ValueError('Numpy arrays would raise and tell you to use .any() or all()')
-
-    class NumpyLike:
-
-        def __eq__(self, other):
-            return NumpyNonZero()
-
-        def something(self):
-            pass
-
-    x = NumpyLike()
-    d = {'a': x}
-
-    # just assert these do not raise. They (strangely) trigger different
-    # codepath
-    get_completion('d["a"].some', {'d':d})
-    get_completion('x.some', {'x':x})
-
-
 def test_nested_resolve():
     class XX():
         def x():
@@ -77,7 +47,7 @@ def test_nested_resolve():
 
     cls = get_completion('XX', locals())
     func = get_completion('XX.x', locals())
-    assert (func.line, func.column) == (cls.line + 1, 12)
+    assert func.start_pos == (cls.start_pos[0] + 1, 12)
 
 
 def test_side_effect_completion():
@@ -90,131 +60,101 @@ def test_side_effect_completion():
     side_effect = get_completion('SideEffectContainer', _GlobalNameSpace.__dict__)
 
     # It's a class that contains MixedObject.
-    context, = side_effect._name.infer()
-    assert isinstance(context, mixed.MixedObject)
+    assert isinstance(side_effect._definition.base, mixed.MixedObject)
     foo = get_completion('SideEffectContainer.foo', _GlobalNameSpace.__dict__)
     assert foo.name == 'foo'
 
 
-def _assert_interpreter_complete(source, namespace, completions,
-                                 **kwds):
-    script = jedi.Interpreter(source, [namespace], **kwds)
-    cs = script.completions()
-    actual = [c.name for c in cs]
-    assert sorted(actual) == sorted(completions)
+class TestInterpreterAPI(TestCase):
+    def check_interpreter_complete(self, source, namespace, completions,
+                                   **kwds):
+        script = jedi.Interpreter(source, [namespace], **kwds)
+        cs = script.completions()
+        actual = [c.name for c in cs]
+        self.assertEqual(sorted(actual), sorted(completions))
 
+    def test_complete_raw_function(self):
+        from os.path import join
+        self.check_interpreter_complete('join("").up',
+                                        locals(),
+                                        ['upper'])
 
-def test_complete_raw_function():
-    from os.path import join
-    _assert_interpreter_complete('join("").up',
-                                 locals(),
-                                 ['upper'])
+    def test_complete_raw_function_different_name(self):
+        from os.path import join as pjoin
+        self.check_interpreter_complete('pjoin("").up',
+                                        locals(),
+                                        ['upper'])
 
+    def test_complete_raw_module(self):
+        import os
+        self.check_interpreter_complete('os.path.join("a").up',
+                                        locals(),
+                                        ['upper'])
 
-def test_complete_raw_function_different_name():
-    from os.path import join as pjoin
-    _assert_interpreter_complete('pjoin("").up',
-                                 locals(),
-                                 ['upper'])
+    def test_complete_raw_instance(self):
+        import datetime
+        dt = datetime.datetime(2013, 1, 1)
+        completions = ['time', 'timetz', 'timetuple']
+        if is_py33:
+            completions += ['timestamp']
+        self.check_interpreter_complete('(dt - dt).ti',
+                                        locals(),
+                                        completions)
 
+    def test_list(self):
+        array = ['haha', 1]
+        self.check_interpreter_complete('array[0].uppe',
+                                        locals(),
+                                        ['upper'])
+        self.check_interpreter_complete('array[0].real',
+                                        locals(),
+                                        [])
 
-def test_complete_raw_module():
-    import os
-    _assert_interpreter_complete('os.path.join("a").up',
-                                 locals(),
-                                 ['upper'])
+        # something different, no index given, still just return the right
+        self.check_interpreter_complete('array[int].real',
+                                        locals(),
+                                        ['real'])
+        self.check_interpreter_complete('array[int()].real',
+                                        locals(),
+                                        ['real'])
+        # inexistent index
+        self.check_interpreter_complete('array[2].upper',
+                                        locals(),
+                                        ['upper'])
 
+    def test_slice(self):
+        class Foo():
+            bar = []
+        baz = 'xbarx'
+        self.check_interpreter_complete('getattr(Foo, baz[1:-1]).append',
+                                        locals(),
+                                        ['append'])
 
-def test_complete_raw_instance():
-    import datetime
-    dt = datetime.datetime(2013, 1, 1)
-    completions = ['time', 'timetz', 'timetuple']
-    if is_py33:
-        completions += ['timestamp']
-    _assert_interpreter_complete('(dt - dt).ti',
-                                 locals(),
-                                 completions)
+    def test_getitem_side_effects(self):
+        class Foo():
+            def __getitem__(self, index):
+                # possible side effects here, should therefore not call this.
+                return index
 
+        foo = Foo()
+        self.check_interpreter_complete('foo[0].', locals(), [])
 
-def test_list():
-    array = ['haha', 1]
-    _assert_interpreter_complete('array[0].uppe',
-                                 locals(),
-                                 ['upper'])
-    _assert_interpreter_complete('array[0].real',
-                                 locals(),
-                                 [])
+    def test_property_error(self):
+        class Foo():
+            @property
+            def bar(self):
+                raise ValueError
 
-    # something different, no index given, still just return the right
-    _assert_interpreter_complete('array[int].real',
-                                 locals(),
-                                 ['real'])
-    _assert_interpreter_complete('array[int()].real',
-                                 locals(),
-                                 ['real'])
-    # inexistent index
-    _assert_interpreter_complete('array[2].upper',
-                                 locals(),
-                                 ['upper'])
+        foo = Foo()
+        self.check_interpreter_complete('foo.bar', locals(), ['bar'])
+        self.check_interpreter_complete('foo.bar.baz', locals(), [])
 
+    def test_param_completion(self):
+        def foo(bar):
+            pass
 
-def test_slice():
-    class Foo1():
-        bar = []
-    baz = 'xbarx'
-    _assert_interpreter_complete('getattr(Foo1, baz[1:-1]).append',
-                                 locals(),
-                                 ['append'])
+        lambd = lambda xyz: 3
 
-
-def test_getitem_side_effects():
-    class Foo2():
-        def __getitem__(self, index):
-            # possible side effects here, should therefore not call this.
-            return index
-
-    foo = Foo2()
-    _assert_interpreter_complete('foo[0].', locals(), [])
-
-
-def test_property_error_oldstyle():
-    lst = []
-    class Foo3():
-        @property
-        def bar(self):
-            lst.append(1)
-            raise ValueError
-
-    foo = Foo3()
-    _assert_interpreter_complete('foo.bar', locals(), ['bar'])
-    _assert_interpreter_complete('foo.bar.baz', locals(), [])
-
-    # There should not be side effects
-    assert lst == []
-
-
-def test_property_error_newstyle():
-    lst = []
-    class Foo3(object):
-        @property
-        def bar(self):
-            lst.append(1)
-            raise ValueError
-
-    foo = Foo3()
-    _assert_interpreter_complete('foo.bar', locals(), ['bar'])
-    _assert_interpreter_complete('foo.bar.baz', locals(), [])
-
-    # There should not be side effects
-    assert lst == []
-
-
-def test_param_completion():
-    def foo(bar):
-        pass
-
-    lambd = lambda xyz: 3
-
-    _assert_interpreter_complete('foo(bar', locals(), ['bar'])
-    # TODO we're not yet using the Python3.5 inspect.signature, yet.
-    assert not jedi.Interpreter('lambd(xyz', [locals()]).completions()
+        self.check_interpreter_complete('foo(bar', locals(), ['bar'])
+        # TODO we're not yet using the Python3.5 inspect.signature, yet.
+        assert not jedi.Interpreter('lambd(xyz', [locals()]).completions()

@@ -116,7 +116,7 @@ namespace ICSharpCode.NRefactory.CSharp
 
 			Expression nae2 = match.Get<Expression>("nae2").SingleOrDefault();
 			string nae2Name = ExtractExpressionName(ref nae2);
-			if (nae2Name == null)
+			if (nae1Name == null)
 				return false;
 
 			bool introduceLetClause = true;

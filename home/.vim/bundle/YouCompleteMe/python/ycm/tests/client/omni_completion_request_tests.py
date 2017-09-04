@@ -19,7 +19,8 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 from mock import MagicMock
@@ -29,14 +30,11 @@ from hamcrest import assert_that, has_entries
 from ycm.client.omni_completion_request import OmniCompletionRequest
 
 
-def BuildOmnicompletionRequest( results, start_column = 1 ):
+def BuildOmnicompletionRequest( results ):
   omni_completer = MagicMock()
   omni_completer.ComputeCandidates = MagicMock( return_value = results )
 
-  request_data = {
-    'start_column': start_column
-  }
-  request = OmniCompletionRequest( omni_completer, request_data )
+  request = OmniCompletionRequest( omni_completer, None )
   request.Start()
 
   return request
@@ -52,10 +50,7 @@ def Response_FromOmniCompleter_test():
   results = [ { "word": "test" } ]
   request = BuildOmnicompletionRequest( results )
 
-  eq_( request.Response(), {
-    'completions': results,
-    'completion_start_column': 1
-  } )
+  eq_( request.Response(), results )
 
 
 def RawResponse_ConvertedFromOmniCompleter_test():
@@ -79,7 +74,7 @@ def RawResponse_ConvertedFromOmniCompleter_test():
   ]
   request = BuildOmnicompletionRequest( vim_results )
 
-  results = request.RawResponse()[ 'completions' ]
+  results = request.RawResponse()
 
   eq_( len( results ), len( expected_results ) )
   for result, expected_result in zip( results, expected_results ):

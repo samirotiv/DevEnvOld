@@ -15,7 +15,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ICSharpCode.NRefactory.MonoCSharp {
+namespace Mono.CSharp {
 
 	[Flags]
 	public enum MemberKind
@@ -93,7 +93,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 
 		public static MemberFilter Constructor (AParametersCollection param)
 		{
-			return new MemberFilter (ICSharpCode.NRefactory.MonoCSharp.Constructor.ConstructorName, 0, MemberKind.Constructor, param, null);
+			return new MemberFilter (Mono.CSharp.Constructor.ConstructorName, 0, MemberKind.Constructor, param, null);
 		}
 
 		public static MemberFilter Property (string name, TypeSpec type)
@@ -566,7 +566,11 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 					for (int i = 0; i < applicable.Count; ++i) {
 						var entry = applicable [i];
 
-						if ((entry.Modifiers & Modifiers.PUBLIC) == 0 && !entry.IsAccessible (member))
+						if ((entry.Modifiers & Modifiers.PRIVATE) != 0)
+							continue;
+
+						if ((entry.Modifiers & Modifiers.AccessibilityMask) == Modifiers.INTERNAL &&
+							!entry.DeclaringType.MemberDefinition.IsInternalAsPublic (member.Module.DeclaringAssembly))
 							continue;
 
 						//
@@ -686,10 +690,9 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			throw new NotImplementedException (member.GetType ().ToString ());
 		}
 
-		public static List<FieldSpec> GetAllFieldsForDefiniteAssignment (TypeSpec container, IMemberContext context)
+		public static List<FieldSpec> GetAllFieldsForDefiniteAssignment (TypeSpec container)
 		{
 			List<FieldSpec> fields = null;
-			bool imported = container.MemberDefinition.IsImported;
 			foreach (var entry in container.MemberCache.member_hash) {
 				foreach (var name_entry in entry.Value) {
 					if (name_entry.Kind != MemberKind.Field)
@@ -705,11 +708,14 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 						continue;
 
 					var fs = (FieldSpec) name_entry;
-					if (imported && ShouldIgnoreFieldForDefiniteAssignment (fs, context))
-						continue;
 
-					//if ((fs.Modifiers & (Modifiers.BACKING_FIELD) != 0)
-					//	continue;
+					//
+					// LAMESPEC: Very bizzare hack, definitive assignment is not done
+					// for imported non-public reference fields except array. No idea what the
+					// actual csc rule is
+					//
+					if (!fs.IsPublic && container.MemberDefinition.IsImported && (!fs.MemberType.IsArray && TypeSpec.IsReferenceType (fs.MemberType)))
+						continue;
 
 					if (fields == null)
 						fields = new List<FieldSpec> ();
@@ -720,29 +726,6 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			}
 
 			return fields ?? new List<FieldSpec> (0);
-		}
-
-		static bool ShouldIgnoreFieldForDefiniteAssignment (FieldSpec fs, IMemberContext context)
-		{
-			//
-			// LAMESPEC: This mimics csc quirk where definitive assignment is not done
-			// for all kinds of imported non-public struct fields
-			//
-			var mod = fs.Modifiers;
-			if ((mod & Modifiers.PRIVATE) == 0 && ((mod & Modifiers.INTERNAL) != 0 && fs.DeclaringType.MemberDefinition.IsInternalAsPublic (context.Module.DeclaringAssembly)))
-				return false;
-
-			//
-			// Ignore reference type fields except when type is an array or type parameter
-			//
-			var type = fs.MemberType;
-			switch (type.Kind) {
-			case MemberKind.ArrayType:
-			case MemberKind.TypeParameter:
-				return false;
-			default:
-				return TypeSpec.IsReferenceType (type);
-			}
 		}
 
 		public static IList<MemberSpec> GetCompletitionMembers (IMemberContext ctx, TypeSpec container, string name)
@@ -1316,7 +1299,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp {
 			if (a.DeclaringType.MemberDefinition != b.DeclaringType.MemberDefinition)
 				return mc_b;
 
-			if (mc_a.Location.File != mc_b.Location.File)
+			if (mc_a.Location.File != mc_a.Location.File)
 				return mc_b;
 
 			return mc_b.Location.Row > mc_a.Location.Row ? mc_b : mc_a;

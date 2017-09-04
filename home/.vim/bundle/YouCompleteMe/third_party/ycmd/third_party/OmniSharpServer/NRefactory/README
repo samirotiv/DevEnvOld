@@ -1,14 +1,4 @@
-﻿Note: There is currently no maintainer for NRefactory.
-
-If you need a C# parser / compiler frontend, use Microsoft.CodeAnalysis (Roslyn)
-instead.
-
-The refactorings in NRefactory have been ported to Roslyn:
-    https://github.com/icsharpcode/RefactoringEssentials/
-
-------------------------------------------------------------------------------
-
-Overview of the NRefactory library:
+﻿Overview of the NRefactory library:
 
 Introductory documentation:
 	 http://www.codeproject.com/Articles/408663/Using-NRefactory-for-analyzing-Csharp-code
@@ -18,7 +8,7 @@ How to download:
 	- Sourcecode is available on GitHub (https://github.com/icsharpcode/NRefactory)
 
 How to compile:
-	1. Get Mono.Cecil 0.9.6
+	1. Get Mono.Cecil
 		Get Cecil from https://github.com/jbevain/cecil ('git clone git://github.com/jbevain/cecil.git')
 		or download Cecil from https://github.com/jbevain/cecil/ and unzip it into a directory named "cecil"
 		next to the directory containing NRefactory.
@@ -29,19 +19,18 @@ How to compile:
 Features:
 	- C# Parser
 	- Abstract Syntax Tree with pattern-matching support
-	- Semantic Analysis for C# (supports C# 5.0)
+	- Semantic Analysis for C# (supports C# 4.0 + async/await)
 	- Code Completion for C#
 	- Pretty Printer for C#
 	- Lots of C# refactorings
 	
 Non-Features:
-    - C# 6 is not supported.
-	- VB support is not implemented.
+	- VB support is not implemented yet.
 	- NRefactory cannot generate IL code -- it's a compiler frontend, not a full compiler
 
 Dependencies:
 	.NET 4.0
-	Mono.Cecil 0.9.6
+	Mono.Cecil 0.9.5
 	NRefactory contains a modified copy of mcs (Mono's C# compiler) for the C# parser.
 
 

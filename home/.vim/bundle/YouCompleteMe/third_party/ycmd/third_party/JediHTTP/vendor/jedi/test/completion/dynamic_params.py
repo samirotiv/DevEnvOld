@@ -56,11 +56,11 @@ def func(c):
     return c
 
 #? str()
-func("something")
+func("str")
 
 @def_func
 def func(c=1):
-    #? float()
+    #? int() float()
     return c
 
 func(1.0)
@@ -123,7 +123,7 @@ A(3).test2()
 
 
 # -----------------
-# comprehensions
+# list comprehensions
 # -----------------
 
 def from_comprehension(foo):

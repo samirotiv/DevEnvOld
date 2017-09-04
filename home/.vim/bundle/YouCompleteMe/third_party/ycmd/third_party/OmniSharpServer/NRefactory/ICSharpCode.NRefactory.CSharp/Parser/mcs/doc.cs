@@ -19,7 +19,7 @@ using System.Text;
 using System.Xml;
 using System.Linq;
 
-namespace ICSharpCode.NRefactory.MonoCSharp
+namespace Mono.CSharp
 {
 	//
 	// Implements XML documentation generation.
@@ -303,7 +303,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 
 			TypeExpr texpr = left as TypeExpr;
 			if (texpr != null) {
-				var found = MemberCache.FindNestedType (texpr.Type, mn.Name, mn.Arity);
+				var found = MemberCache.FindNestedType (texpr.Type, ParsedName.Name, ParsedName.Arity);
 				if (found != null)
 					return new TypeExpression (found, Location.Null);
 
@@ -695,7 +695,7 @@ namespace ICSharpCode.NRefactory.MonoCSharp
 			return host.GetSignatureForError ();
 		}
 
-		public ExtensionMethodCandidates LookupExtensionMethod (string name, int arity)
+		public ExtensionMethodCandidates LookupExtensionMethod (TypeSpec extensionType, string name, int arity)
 		{
 			return null;
 		}

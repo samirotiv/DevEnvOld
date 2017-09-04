@@ -1,5 +1,5 @@
 //
-// ICSharpCode.NRefactory.MonoCSharp.Debugger/MonoSymbolTable.cs
+// Mono.CSharp.Debugger/MonoSymbolTable.cs
 //
 // Author:
 //   Martin Baulig (martin@ximian.com)
@@ -184,7 +184,6 @@ namespace Mono.CompilerServices.SymbolWriter
 		#region This is actually written to the symbol file
 		public readonly int Row;
 		public int Column;
-		public int EndRow, EndColumn;
 		public readonly int File;
 		public readonly int Offset;
 		public readonly bool IsHidden;	// Obsolete is never used
@@ -215,24 +214,17 @@ namespace Mono.CompilerServices.SymbolWriter
 		}
 
 		public LineNumberEntry (int file, int row, int column, int offset, bool is_hidden)
-		: this (file, row, column, -1, -1, offset, is_hidden)
-		{
-		}
-
-		public LineNumberEntry (int file, int row, int column, int end_row, int end_column, int offset, bool is_hidden)
 		{
 			this.File = file;
 			this.Row = row;
 			this.Column = column;
-			this.EndRow = end_row;
-			this.EndColumn = end_column;
 			this.Offset = offset;
 			this.IsHidden = is_hidden;
 		}
 
 		public override string ToString ()
 		{
-			return String.Format ("[Line {0}:{1,2}-{3,4}:{5}]", File, Row, Column, EndRow, EndColumn, Offset);
+			return String.Format ("[Line {0}:{1,2}:{3}]", File, Row, Column, Offset);
 		}
 	}
 
@@ -844,7 +836,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			this._line_numbers = lines;
 		}
 
-		internal void Write (MonoSymbolFile file, MyBinaryWriter bw, bool hasColumnsInfo, bool hasEndInfo)
+		internal void Write (MonoSymbolFile file, MyBinaryWriter bw, bool readColumnsInfo)
 		{
 			int start = (int) bw.BaseStream.Position;
 
@@ -901,37 +893,23 @@ namespace Mono.CompilerServices.SymbolWriter
 			bw.Write ((byte) 1);
 			bw.Write (DW_LNE_end_sequence);
 
-			if (hasColumnsInfo) {
-				for (int i = 0; i < LineNumbers.Length; i++) {
-					var ln = LineNumbers [i];
-					if (ln.Row >= 0)
-						bw.WriteLeb128 (ln.Column);
-				}
-			}
-
-			if (hasEndInfo) {
-				for (int i = 0; i < LineNumbers.Length; i++) {
-					var ln = LineNumbers [i];
-					if (ln.EndRow == -1 || ln.EndColumn == -1 || ln.Row > ln.EndRow) {
-						bw.WriteLeb128 (0xffffff);
-					} else {
-						bw.WriteLeb128 (ln.EndRow - ln.Row);
-						bw.WriteLeb128 (ln.EndColumn);
-					}
-				}
+			for (int i = 0; i < LineNumbers.Length; i++) {
+				var ln = LineNumbers [i];
+				if (ln.Row >= 0)
+					bw.WriteLeb128 (ln.Column);
 			}
 
 			file.ExtendedLineNumberSize += (int) bw.BaseStream.Position - start;
 		}
 
-		internal static LineNumberTable Read (MonoSymbolFile file, MyBinaryReader br, bool readColumnsInfo, bool readEndInfo)
+		internal static LineNumberTable Read (MonoSymbolFile file, MyBinaryReader br, bool readColumnsInfo)
 		{
 			LineNumberTable lnt = new LineNumberTable (file);
-			lnt.DoRead (file, br, readColumnsInfo, readEndInfo);
+			lnt.DoRead (file, br, readColumnsInfo);
 			return lnt;
 		}
 
-		void DoRead (MonoSymbolFile file, MyBinaryReader br, bool includesColumns, bool includesEnds)
+		void DoRead (MonoSymbolFile file, MyBinaryReader br, bool includesColumns)
 		{
 			var lines = new List<LineNumberEntry> ();
 
@@ -1010,20 +988,6 @@ namespace Mono.CompilerServices.SymbolWriter
 						ln.Column = br.ReadLeb128 ();
 				}
 			}
-			if (includesEnds) {
-				for (int i = 0; i < _line_numbers.Length; ++i) {
-					var ln = _line_numbers[i];
-
-					int row = br.ReadLeb128 ();
-					if (row == 0xffffff) {
-						ln.EndRow = -1;
-						ln.EndColumn = -1;
-					} else {
-						ln.EndRow = ln.Row + row;
-						ln.EndColumn = br.ReadLeb128 ();
-					}
-				}
-			}
 		}
 
 		public bool GetMethodBounds (out LineNumberEntry start, out LineNumberEntry end)
@@ -1081,8 +1045,7 @@ namespace Mono.CompilerServices.SymbolWriter
 		public enum Flags
 		{
 			LocalNamesAmbiguous	= 1,
-			ColumnsInfoIncluded = 1 << 1,
-			EndInfoIncluded = 1 << 2
+			ColumnsInfoIncluded = 1 << 1
 		}
 
 		public const int Size = 12;
@@ -1235,13 +1198,8 @@ namespace Mono.CompilerServices.SymbolWriter
 				bw.Write (real_name);
 			}
 
-			foreach (var lne in lnt.LineNumbers) {
-				if (lne.EndRow != -1 || lne.EndColumn != -1)
-					flags |= Flags.EndInfoIncluded;
-			}
-
 			LineNumberTableOffset = (int) bw.BaseStream.Position;
-			lnt.Write (file, bw, (flags & Flags.ColumnsInfoIncluded) != 0, (flags & Flags.EndInfoIncluded) != 0);
+			lnt.Write (file, bw, (flags & Flags.ColumnsInfoIncluded) != 0);
 
 			DataOffset = (int) bw.BaseStream.Position;
 
@@ -1278,7 +1236,7 @@ namespace Mono.CompilerServices.SymbolWriter
 				long old_pos = reader.BaseStream.Position;
 				reader.BaseStream.Position = LineNumberTableOffset;
 
-				lnt = LineNumberTable.Read (SymbolFile, reader, (flags & Flags.ColumnsInfoIncluded) != 0, (flags & Flags.EndInfoIncluded) != 0);
+				lnt = LineNumberTable.Read (SymbolFile, reader, (flags & Flags.ColumnsInfoIncluded) != 0);
 
 				reader.BaseStream.Position = old_pos;
 				return lnt;

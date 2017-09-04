@@ -61,14 +61,8 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 		
 		public override IMember Specialize(TypeParameterSubstitution substitution)
 		{
-			if (TypeParameterSubstitution.Identity.Equals(substitution)
-			    || DeclaringTypeDefinition == null
-			    || DeclaringTypeDefinition.TypeParameterCount == 0)
-			{
+			if (TypeParameterSubstitution.Identity.Equals(substitution))
 				return this;
-			}
-			if (substitution.MethodTypeArguments != null && substitution.MethodTypeArguments.Count > 0)
-				substitution = new TypeParameterSubstitution(substitution.ClassTypeArguments, EmptyList<IType>.Instance);
 			return new SpecializedEvent(this, substitution);
 		}
 	}

@@ -19,7 +19,8 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
 from ycm.tests.test_utils import MockVimModule
@@ -29,12 +30,11 @@ import functools
 import os
 import requests
 import time
-import warnings
 
 from ycm.client.base_request import BaseRequest
 from ycm.youcompleteme import YouCompleteMe
 from ycmd import user_options_store
-from ycmd.utils import CloseStandardStreams, WaitUntilProcessIsTerminated
+from ycmd.utils import WaitUntilProcessIsTerminated
 
 # The default options which are only relevant to the client, not the server and
 # thus are not part of default_options.json, but are required for a working
@@ -66,7 +66,7 @@ def _IsReady():
   return BaseRequest.GetDataFromHandler( 'ready' )
 
 
-def WaitUntilReady( timeout = 5 ):
+def _WaitUntilReady( timeout = 5 ):
   expiration = time.time() + timeout
   while True:
     try:
@@ -85,21 +85,8 @@ def StopServer( ycm ):
   try:
     ycm.OnVimLeave()
     WaitUntilProcessIsTerminated( ycm._server_popen )
-    CloseStandardStreams( ycm._server_popen )
   except Exception:
     pass
-
-
-def setUpPackage():
-  # We treat warnings as errors in our tests because warnings raised inside Vim
-  # will interrupt user workflow with a traceback and we don't want that.
-  warnings.filterwarnings( 'error' )
-  # We ignore warnings from nose as we are not interested in them.
-  warnings.filterwarnings( 'ignore', module = 'nose' )
-
-
-def tearDownPackage():
-  warnings.resetwarnings()
 
 
 def YouCompleteMeInstance( custom_options = {} ):
@@ -123,8 +110,7 @@ def YouCompleteMeInstance( custom_options = {} ):
     @functools.wraps( test )
     def Wrapper( *args, **kwargs ):
       ycm = YouCompleteMe( _MakeUserOptions( custom_options ) )
-      WaitUntilReady()
-      ycm.CheckIfServerIsReady()
+      _WaitUntilReady()
       try:
         test( ycm, *args, **kwargs )
       finally:

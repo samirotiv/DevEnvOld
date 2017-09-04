@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from __future__ import with_statement
+import unittest
 import bottle
-from tools import ServerTestBase, chdir
+from tools import ServerTestBase
 from bottle import tob
 
 class TestWsgi(ServerTestBase):
@@ -49,16 +49,6 @@ class TestWsgi(ServerTestBase):
             return 'foo'
         self.assertBody('foo', '/')
 
-    def get204(self):
-        """ 204 responses must not return some entity headers """
-        bad = ('content-length', 'content-type')
-        for h in bad:
-            bottle.response.set_header(h, 'foo')
-        bottle.status = 204
-        for h, v in bottle.response.headerlist:
-            self.assertFalse(h.lower() in bad, "Header %s not deleted" % h)
-
-
     def get304(self):
         """ 304 responses must not return entity headers """
         bad = ('allow', 'content-encoding', 'content-language',
@@ -102,17 +92,6 @@ class TestWsgi(ServerTestBase):
         @bottle.route('/my-öäü/:string')
         def test(string): return string
         self.assertBody(tob('urf8-öäü'), '/my-öäü/urf8-öäü')
-
-    def test_utf8_header(self):
-        header = 'öäü'
-        if bottle.py3k:
-            header = header.encode('utf8').decode('latin1')
-        @bottle.route('/test')
-        def test():
-            h = bottle.request.get_header('X-Test')
-            self.assertEqual(h, 'öäü')
-            bottle.response.set_header('X-Test', h)
-        self.assertHeader('X-Test', header, '/test', env={'HTTP_X_TEST': header})
 
     def test_utf8_404(self):
         self.assertStatus(404, '/not-found/urf8-öäü')
@@ -172,32 +151,6 @@ class TestWsgi(ServerTestBase):
             c = [x.strip() for x in c]
         self.assertTrue('b=b' in c)
         self.assertTrue('c=c; Path=/' in c)
-
-class TestErrorHandling(ServerTestBase):
-    def test_error_routing(self):
-
-        @bottle.route("/<code:int>")
-        def throw_error(code):
-            bottle.abort(code)
-
-        # Decorator syntax
-        @bottle.error(500)
-        def catch_500(err):
-            return err.status_line
-
-        # Decorator syntax (unusual/custom error codes)
-        @bottle.error(999)
-        def catch_999(err):
-            return err.status_line
-
-        # Callback argument syntax
-        def catch_404(err):
-            return err.status_line
-        bottle.error(404, callback=catch_404)
-
-        self.assertBody("404 Not Found", '/not_found')
-        self.assertBody("500 Internal Server Error", '/500')
-        self.assertBody("999 Unknown", '/999')
 
 
 class TestRouteDecorator(ServerTestBase):
@@ -285,85 +238,10 @@ class TestRouteDecorator(ServerTestBase):
         def hook():
             bottle.request.environ['hooktest'] = 'before'
         @bottle.hook('after_request')
-        def hook(*args, **kwargs):
+        def hook():
             bottle.response.headers['X-Hook'] = 'after'
         self.assertBody('before', '/test')
         self.assertHeader('X-Hook', 'after', '/test')
-
-    def test_after_request_sees_HTTPError_response(self):
-        """ Issue #671  """
-        called = []
-
-        @bottle.hook('after_request')
-        def after_request():
-            called.append('after')
-            self.assertEqual(400, bottle.response.status_code)
-
-        @bottle.get('/')
-        def _get():
-            called.append("route")
-            bottle.abort(400, 'test')
-
-        self.urlopen("/")
-        self.assertEqual(["route", "after"], called)
-
-    def test_after_request_hooks_run_after_exception(self):
-        """ Issue #671  """
-        called = []
-
-        @bottle.hook('before_request')
-        def before_request():
-            called.append('before')
-
-        @bottle.hook('after_request')
-        def after_request():
-            called.append('after')
-
-        @bottle.get('/')
-        def _get():
-            called.append("route")
-            1/0
-
-        self.urlopen("/")
-        self.assertEqual(["before", "route", "after"], called)
-
-    def test_after_request_hooks_run_after_exception_in_before_hook(self):
-        """ Issue #671  """
-        called = []
-
-        @bottle.hook('before_request')
-        def before_request():
-            called.append('before')
-            1 / 0
-
-        @bottle.hook('after_request')
-        def after_request():
-            called.append('after')
-
-        @bottle.get('/')
-        def _get():
-            called.append("route")
-
-        self.urlopen("/")
-        self.assertEqual(["before", "after"], called)
-
-    def test_after_request_hooks_may_rise_response_exception(self):
-        """ Issue #671  """
-        called = []
-
-        @bottle.hook('after_request')
-        def after_request():
-            called.append('after')
-            bottle.abort(400, "hook_content")
-
-        @bottle.get('/')
-        def _get():
-            called.append("route")
-            return "XXX"
-
-        self.assertInBody("hook_content", "/")
-        self.assertEqual(["route", "after"], called)
-
 
     def test_template(self):
         @bottle.route(template='test {{a}} {{b}}')
@@ -378,7 +256,7 @@ class TestRouteDecorator(ServerTestBase):
     def test_name(self):
         @bottle.route(name='foo')
         def test(x=5): return 'ok'
-        self.assertEqual('/test/6', bottle.url('foo', x=6))
+        self.assertEquals('/test/6', bottle.url('foo', x=6))
 
     def test_callback(self):
         def test(x=5): return str(x)
@@ -395,14 +273,13 @@ class TestDecorators(ServerTestBase):
 
     def test_view(self):
         """ WSGI: Test view-decorator (should override autojson) """
-        with chdir(__file__):
-            @bottle.route('/tpl')
-            @bottle.view('stpl_t2main')
-            def test():
-                return dict(content='1234')
-            result = '+base+\n+main+\n!1234!\n+include+\n-main-\n+include+\n-base-\n'
-            self.assertHeader('Content-Type', 'text/html; charset=UTF-8', '/tpl')
-            self.assertBody(result, '/tpl')
+        @bottle.route('/tpl')
+        @bottle.view('stpl_t2main')
+        def test():
+            return dict(content='1234')
+        result = '+base+\n+main+\n!1234!\n+include+\n-main-\n+include+\n-base-\n'
+        self.assertHeader('Content-Type', 'text/html; charset=UTF-8', '/tpl')
+        self.assertBody(result, '/tpl')
 
     def test_view_error(self):
         """ WSGI: Test if view-decorator reacts on non-dict return values correctly."""
@@ -458,14 +335,6 @@ class TestDecorators(ServerTestBase):
 class TestAppShortcuts(ServerTestBase):
     def setUp(self):
         ServerTestBase.setUp(self)
-        
-    def testWithStatement(self):
-        default = bottle.default_app()
-        inner_app = bottle.Bottle()
-        self.assertEqual(default, bottle.default_app())
-        with inner_app:
-            self.assertEqual(inner_app, bottle.default_app())
-        self.assertEqual(default, bottle.default_app())
 
     def assertWraps(self, test, other):
         self.assertEqual(test.__doc__, other.__doc__)
@@ -479,3 +348,10 @@ class TestAppShortcuts(ServerTestBase):
 
     def test_module_shortcuts_with_different_name(self):
         self.assertWraps(bottle.url, bottle.app().get_url)
+
+
+
+
+
+if __name__ == '__main__': #pragma: no cover
+    unittest.main()

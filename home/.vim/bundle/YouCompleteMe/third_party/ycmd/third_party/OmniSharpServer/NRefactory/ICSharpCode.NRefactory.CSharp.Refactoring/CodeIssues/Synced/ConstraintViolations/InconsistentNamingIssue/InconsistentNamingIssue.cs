@@ -36,7 +36,6 @@ namespace ICSharpCode.NRefactory.CSharp.Refactoring
 	       Description = "Name doesn't match the defined style for this entity.",
            Category = IssueCategories.ConstraintViolations,
 	       Severity = Severity.Warning,
-	       IsEnabledByDefault = false,
            AnalysisDisableKeyword = "InconsistentNaming")]
 	public class InconsistentNamingIssue : CodeIssueProvider
 	{

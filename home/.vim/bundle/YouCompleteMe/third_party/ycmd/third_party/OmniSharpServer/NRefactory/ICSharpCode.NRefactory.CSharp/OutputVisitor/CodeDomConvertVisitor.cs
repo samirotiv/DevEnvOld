@@ -218,12 +218,7 @@ namespace ICSharpCode.NRefactory.CSharp
 		{
 			return null;
 		}
-
-		CodeObject IAstVisitor<CodeObject>.VisitErrorNode(AstNode errorNode)
-		{
-			return null;
-		}
-
+		
 		CodeObject IAstVisitor<CodeObject>.VisitAnonymousMethodExpression(AnonymousMethodExpression anonymousMethodExpression)
 		{
 			return MakeSnippetExpression(anonymousMethodExpression);
@@ -448,7 +443,7 @@ namespace ICSharpCode.NRefactory.CSharp
 			if (id != null) {
 				CodeExpression target;
 				if (rr != null && rr.Member.IsStatic)
-					target = new CodeTypeReferenceExpression(Convert(rr.Member.DeclaringType ?? SpecialType.UnknownType));
+					target = new CodeTypeReferenceExpression(Convert(rr.Member.DeclaringType));
 				else
 					target = new CodeThisReferenceExpression();
 				
@@ -493,7 +488,7 @@ namespace ICSharpCode.NRefactory.CSharp
 		{
 			if (target == null) {
 				if (mrr.Member.IsStatic)
-					target = new CodeTypeReferenceExpression(Convert(mrr.Member.DeclaringType ?? SpecialType.UnknownType));
+					target = new CodeTypeReferenceExpression(Convert(mrr.Member.DeclaringType));
 				else
 					target = new CodeThisReferenceExpression();
 			}

@@ -1,8 +1,8 @@
-from setuptools import setup
+from distutils.core import setup
 
 setup(
     name     = 'frozendict',
-    version  = '1.2',
+    version  = '0.3',
     url      = 'https://github.com/slezica/python-frozendict',
 
     author       = 'Santiago Lezica',
@@ -12,5 +12,5 @@ setup(
     license  = 'MIT License',
 
     description      = 'An immutable dictionary',
-    long_description = open('README.rst').read()
+    long_description = open('README.txt').read()
 )

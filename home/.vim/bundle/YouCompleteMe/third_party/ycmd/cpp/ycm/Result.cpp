@@ -17,10 +17,42 @@
 
 #include "Result.h"
 #include "Utils.h"
+#include <boost/algorithm/string.hpp>
+#include <functional>
+#include <algorithm>
+#include <locale>
+
+using boost::algorithm::istarts_with;
 
 namespace YouCompleteMe {
 
 namespace {
+
+char ChangeCharCase( char c ) {
+  if ( std::isupper( c, std::locale() ) )
+    return std::tolower( c, std::locale() );
+
+  return std::toupper( c, std::locale() );
+}
+
+
+bool CharLessThanWithLowercasePriority( const char &first,
+                                        const char &second ) {
+  char swap_first = ChangeCharCase( first );
+  char swap_second = ChangeCharCase( second );
+  return swap_first < swap_second;
+}
+
+
+bool StringLessThanWithLowercasePriority( const std::string &first,
+                                          const std::string &second ) {
+  return std::lexicographical_compare(
+           first.begin(), first.end(),
+           second.begin(), second.end(),
+           std::function< bool( const char &, const char & ) >(
+             &CharLessThanWithLowercasePriority ) );
+}
+
 
 int LongestCommonSubsequenceLength( const std::string &first,
                                     const std::string &second ) {
@@ -35,7 +67,7 @@ int LongestCommonSubsequenceLength( const std::string &first,
 
   for ( int i = 0; i < longer_len; ++i ) {
     for ( int j = 0; j < shorter_len; ++j ) {
-      if ( Uppercase( longer[ i ] ) == Uppercase( shorter[ j ] ) )
+      if ( toupper( longer[ i ] ) == toupper( shorter[ j ] ) )
         current[ j + 1 ] = previous[ j ] + 1;
       else
         current[ j + 1 ] = std::max( current[ j ], previous[ j + 1 ] );
@@ -57,6 +89,20 @@ int NumWordBoundaryCharMatches( const std::string &query,
 
 } // unnamed namespace
 
+Result::Result()
+  :
+  query_is_empty_( true ),
+  is_subsequence_( false ),
+  first_char_same_in_query_and_text_( false ),
+  ratio_of_word_boundary_chars_in_query_( 0 ),
+  word_boundary_char_utilization_( 0 ),
+  query_is_candidate_prefix_( false ),
+  text_is_lowercase_( false ),
+  char_match_index_sum_( 0 ),
+  text_( NULL ) {
+}
+
+
 Result::Result( bool is_subsequence )
   :
   query_is_empty_( true ),
@@ -67,14 +113,12 @@ Result::Result( bool is_subsequence )
   query_is_candidate_prefix_( false ),
   text_is_lowercase_( false ),
   char_match_index_sum_( 0 ),
-  text_( NULL ),
-  case_swapped_text_( NULL ) {
+  text_( NULL ) {
 }
 
 
 Result::Result( bool is_subsequence,
                 const std::string *text,
-                const std::string *case_swapped_text,
                 bool text_is_lowercase,
                 int char_match_index_sum,
                 const std::string &word_boundary_chars,
@@ -88,8 +132,7 @@ Result::Result( bool is_subsequence,
   query_is_candidate_prefix_( false ),
   text_is_lowercase_( text_is_lowercase ),
   char_match_index_sum_( char_match_index_sum ),
-  text_( text ),
-  case_swapped_text_( case_swapped_text ) {
+  text_( text ) {
   if ( is_subsequence )
     SetResultFeaturesFromQuery( word_boundary_chars, query );
 }
@@ -154,7 +197,7 @@ bool Result::operator< ( const Result &other ) const {
 
   // Lexicographic comparison, but we prioritize lowercase letters over
   // uppercase ones. So "foo" < "Foo".
-  return *case_swapped_text_ < *other.case_swapped_text_;
+  return StringLessThanWithLowercasePriority( *text_, *other.text_ );
 }
 
 
@@ -167,25 +210,15 @@ void Result::SetResultFeaturesFromQuery(
     return;
 
   first_char_same_in_query_and_text_ =
-    Uppercase( query[ 0 ] ) == Uppercase( ( *text_ )[ 0 ] );
+    toupper( query[ 0 ] ) == toupper( ( *text_ )[ 0 ] );
   int num_wb_matches = NumWordBoundaryCharMatches( query,
                                                    word_boundary_chars );
   ratio_of_word_boundary_chars_in_query_ =
     num_wb_matches / static_cast< double >( query.length() );
   word_boundary_char_utilization_ =
     num_wb_matches / static_cast< double >( word_boundary_chars.length() );
-  query_is_candidate_prefix_ = QueryIsPrefix( *text_, query );
+  query_is_candidate_prefix_ = istarts_with( *text_, query );
 
-}
-
-
-bool Result::QueryIsPrefix( const std::string &text,
-                            const std::string &query ) {
-  for ( size_t i = 0; i < query.length(); ++i )
-    if ( Uppercase( query[ i ] ) != Uppercase( text[ i ] ) )
-      return false;
-
-  return true;
 }
 
 } // namespace YouCompleteMe

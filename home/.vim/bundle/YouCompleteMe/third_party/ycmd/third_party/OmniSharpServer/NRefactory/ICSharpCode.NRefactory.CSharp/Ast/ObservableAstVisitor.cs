@@ -48,11 +48,7 @@ namespace ICSharpCode.NRefactory.CSharp
 		void IAstVisitor.VisitNullNode(AstNode nullNode)
 		{
 		}
-
-		void IAstVisitor.VisitErrorNode(AstNode nullNode)
-		{
-		}
-
+		
 		public event Action<SyntaxTree> EnterSyntaxTree, LeaveSyntaxTree;
 		
 		void IAstVisitor.VisitSyntaxTree(SyntaxTree unit)
@@ -618,7 +614,7 @@ namespace ICSharpCode.NRefactory.CSharp
 		{
 			Visit(EnterDirectionExpression, LeaveDirectionExpression, directionExpression);
 		}
-
+		
 		public event Action<MemberReferenceExpression> EnterMemberReferenceExpression, LeaveMemberReferenceExpression;
 		
 		void IAstVisitor.VisitMemberReferenceExpression(MemberReferenceExpression memberReferenceExpression)

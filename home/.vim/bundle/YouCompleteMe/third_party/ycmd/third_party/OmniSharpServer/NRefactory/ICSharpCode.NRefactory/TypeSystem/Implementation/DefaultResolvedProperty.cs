@@ -29,8 +29,6 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 		readonly IList<IParameter> parameters;
 		IMethod getter;
 		IMethod setter;
-		const Accessibility InvalidAccessibility = (Accessibility)0xff;
-		volatile Accessibility cachedAccessiblity = InvalidAccessibility;
 		
 		public DefaultResolvedProperty(IUnresolvedProperty unresolved, ITypeResolveContext parentContext)
 			: base(unresolved, parentContext)
@@ -41,28 +39,6 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 		
 		public IList<IParameter> Parameters {
 			get { return parameters; }
-		}
-		
-		public override Accessibility Accessibility {
-			get {
-				var acc = cachedAccessiblity;
-				if (acc == InvalidAccessibility)
-					return cachedAccessiblity = ComputeAccessibility();
-				else
-					return acc;
-			}
-		}
-		
-		Accessibility ComputeAccessibility()
-		{
-			var baseAcc = base.Accessibility;
-			if (IsOverride && !(CanGet && CanSet)) {
-				foreach (var baseMember in InheritanceHelper.GetBaseMembers(this, false)) {
-					if (!baseMember.IsOverride)
-						return baseMember.Accessibility;
-				}
-			}
-			return baseAcc;
 		}
 		
 		public bool CanGet {
@@ -87,8 +63,7 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 		
 		public override ISymbolReference ToReference()
 		{
-			var declType = this.DeclaringType;
-			var declTypeRef = declType != null ? declType.ToTypeReference() : SpecialType.UnknownType;
+			var declTypeRef = this.DeclaringType.ToTypeReference();
 			if (IsExplicitInterfaceImplementation && ImplementedInterfaceMembers.Count == 1) {
 				return new ExplicitInterfaceImplementationMemberReference(declTypeRef, ImplementedInterfaceMembers[0].ToReference());
 			} else {
@@ -100,14 +75,8 @@ namespace ICSharpCode.NRefactory.TypeSystem.Implementation
 		
 		public override IMember Specialize(TypeParameterSubstitution substitution)
 		{
-			if (TypeParameterSubstitution.Identity.Equals(substitution)
-			    || DeclaringTypeDefinition == null
-			    || DeclaringTypeDefinition.TypeParameterCount == 0)
-			{
+			if (TypeParameterSubstitution.Identity.Equals(substitution))
 				return this;
-			}
-			if (substitution.MethodTypeArguments != null && substitution.MethodTypeArguments.Count > 0)
-				substitution = new TypeParameterSubstitution(substitution.ClassTypeArguments, EmptyList<IType>.Instance);
 			return new SpecializedProperty(this, substitution);
 		}
 	}

@@ -120,15 +120,6 @@ public class FooBar
 }
 ");
 		}
-
-		[Test]
-		public void TestPartial ()
-		{
-			TestWrongContext<UnassignedReadonlyFieldIssue>(@"partial class Test
-{
-	readonly object fooBar;
-}");
-		}
 	}
 }
 

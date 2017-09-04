@@ -1,11 +1,29 @@
 //
+// TypeReference.cs
+//
 // Author:
 //   Jb Evain (jbevain@gmail.com)
 //
-// Copyright (c) 2008 - 2015 Jb Evain
-// Copyright (c) 2008 - 2011 Novell, Inc.
+// Copyright (c) 2008 - 2011 Jb Evain
 //
-// Licensed under the MIT/X11 license.
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 using System;
@@ -65,20 +83,16 @@ namespace Mono.Cecil {
 		public override string Name {
 			get { return base.Name; }
 			set {
-				if (IsWindowsRuntimeProjection && value != base.Name)
-					throw new InvalidOperationException ("Projected type reference name can't be changed.");
 				base.Name = value;
-				ClearFullName ();
+				fullname = null;
 			}
 		}
 
 		public virtual string Namespace {
 			get { return @namespace; }
 			set {
-				if (IsWindowsRuntimeProjection && value != @namespace)
-					throw new InvalidOperationException ("Projected type reference namespace can't be changed.");
 				@namespace = value;
-				ClearFullName ();
+				fullname = null;
 			}
 		}
 
@@ -98,11 +112,6 @@ namespace Mono.Cecil {
 
 				return null;
 			}
-		}
-
-		internal new TypeReferenceProjection WindowsRuntimeProjection {
-			get { return (TypeReferenceProjection) projection; }
-			set { projection = value; }
 		}
 
 		IGenericParameterProvider IGenericContext.Type {
@@ -141,14 +150,10 @@ namespace Mono.Cecil {
 			set {
 				var declaring_type = this.DeclaringType;
 				if (declaring_type != null) {
-					if (IsWindowsRuntimeProjection && value != declaring_type.Scope)
-						throw new InvalidOperationException ("Projected type scope can't be changed.");
 					declaring_type.Scope = value;
 					return;
 				}
 
-				if (IsWindowsRuntimeProjection && value != scope)
-					throw new InvalidOperationException ("Projected type scope can't be changed.");
 				scope = value;
 			}
 		}
@@ -160,10 +165,8 @@ namespace Mono.Cecil {
 		public override TypeReference DeclaringType {
 			get { return base.DeclaringType; }
 			set {
-				if (IsWindowsRuntimeProjection && value != base.DeclaringType)
-					throw new InvalidOperationException ("Projected type declaring type can't be changed.");
 				base.DeclaringType = value;
-				ClearFullName ();
+				fullname = null;
 			}
 		}
 
@@ -172,12 +175,13 @@ namespace Mono.Cecil {
 				if (fullname != null)
 					return fullname;
 
-				fullname = this.TypeFullName ();
-
 				if (IsNested)
-					fullname = DeclaringType.FullName + "/" + fullname;
+					return fullname = DeclaringType.FullName + "/" + Name;
 
-				return fullname;
+				if (string.IsNullOrEmpty (@namespace))
+					return fullname = Name;
+
+				return fullname = @namespace + "." + Name;
 			}
 		}
 
@@ -256,22 +260,12 @@ namespace Mono.Cecil {
 			value_type = valueType;
 		}
 
-		protected virtual void ClearFullName ()
-		{
-			this.fullname = null;
-		}
-
 		public virtual TypeReference GetElementType ()
 		{
 			return this;
 		}
 
-		protected override IMemberDefinition ResolveDefinition ()
-		{
-			return this.Resolve ();
-		}
-
-		public new virtual TypeDefinition Resolve ()
+		public virtual TypeDefinition Resolve ()
 		{
 			var module = this.Module;
 			if (module == null)
@@ -304,13 +298,6 @@ namespace Mono.Cecil {
 			default:
 				return false;
 			}
-		}
-
-		public static string TypeFullName (this TypeReference self)
-		{
-			return string.IsNullOrEmpty (self.Namespace)
-				? self.Name
-				: self.Namespace + '.' + self.Name;
 		}
 
 		public static bool IsTypeOf (this TypeReference self, string @namespace, string name)

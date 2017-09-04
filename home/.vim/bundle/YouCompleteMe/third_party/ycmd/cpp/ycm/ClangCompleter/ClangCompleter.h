@@ -24,6 +24,8 @@
 #include "TranslationUnitStore.h"
 #include "Documentation.h"
 
+#include <boost/utility.hpp>
+
 #include <string>
 
 typedef struct CXTranslationUnitImpl *CXTranslationUnit;
@@ -38,16 +40,14 @@ typedef std::vector< CompletionData > CompletionDatas;
 
 
 // All filename parameters must be absolute paths.
-class ClangCompleter {
+class ClangCompleter : boost::noncopyable {
 public:
   YCM_DLL_EXPORT ClangCompleter();
   YCM_DLL_EXPORT ~ClangCompleter();
-  ClangCompleter( const ClangCompleter& ) = delete;
-  ClangCompleter& operator=( const ClangCompleter& ) = delete;
 
   bool UpdatingTranslationUnit( const std::string &filename );
 
-  YCM_DLL_EXPORT std::vector< Diagnostic > UpdateTranslationUnit(
+  std::vector< Diagnostic > UpdateTranslationUnit(
     const std::string &filename,
     const std::vector< UnsavedFile > &unsaved_files,
     const std::vector< std::string > &flags );
@@ -59,7 +59,7 @@ public:
     const std::vector< UnsavedFile > &unsaved_files,
     const std::vector< std::string > &flags );
 
-  YCM_DLL_EXPORT Location GetDeclarationLocation(
+  Location GetDeclarationLocation(
     const std::string &filename,
     int line,
     int column,
@@ -75,7 +75,7 @@ public:
     const std::vector< std::string > &flags,
     bool reparse = true );
 
-  YCM_DLL_EXPORT std::string GetTypeAtLocation(
+  std::string GetTypeAtLocation(
     const std::string &filename,
     int line,
     int column,
@@ -83,7 +83,7 @@ public:
     const std::vector< std::string > &flags,
     bool reparse = true );
 
-  YCM_DLL_EXPORT std::string GetEnclosingFunctionAtLocation(
+  std::string GetEnclosingFunctionAtLocation(
     const std::string &filename,
     int line,
     int column,
@@ -91,7 +91,7 @@ public:
     const std::vector< std::string > &flags,
     bool reparse = true );
 
-  YCM_DLL_EXPORT std::vector< FixIt > GetFixItsForLocationInFile(
+  std::vector< FixIt > GetFixItsForLocationInFile(
     const std::string &filename,
     int line,
     int column,
@@ -99,7 +99,7 @@ public:
     const std::vector< std::string > &flags,
     bool reparse = true );
 
-  YCM_DLL_EXPORT DocumentationData GetDocsForLocationInFile(
+  DocumentationData GetDocsForLocationInFile(
     const std::string &filename,
     int line,
     int column,

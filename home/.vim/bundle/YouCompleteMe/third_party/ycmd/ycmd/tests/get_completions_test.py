@@ -22,18 +22,19 @@ from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
-# Not installing aliases from python-future; it's unreliable and slow.
+from future import standard_library
+standard_library.install_aliases()
 from builtins import *  # noqa
 
-from hamcrest import ( assert_that, empty, equal_to, has_items,
+from hamcrest import ( assert_that, equal_to, has_items,
                        contains_string, contains_inanyorder )
 from mock import patch
 from nose.tools import eq_
 
-from ycmd.tests import IsolatedYcmd, SharedYcmd, PathToTestFile
+from ycmd.tests import SharedYcmd, PathToTestFile
 from ycmd.tests.test_utils import ( BuildRequest, CompletionEntryMatcher,
                                     DummyCompleter, PatchCompleter,
-                                    ExpectedFailure )
+                                    UserOption, ExpectedFailure )
 
 
 @SharedYcmd
@@ -71,19 +72,20 @@ def GetCompletions_IdentifierCompleter_Works_test( app ):
   )
 
 
-@IsolatedYcmd( { 'min_num_identifier_candidate_chars': 4 } )
+@SharedYcmd
 def GetCompletions_IdentifierCompleter_FilterShortCandidates_test( app ):
-  event_data = BuildRequest( contents = 'foo foogoo gooo',
-                             event_name = 'FileReadyToParse' )
-  app.post_json( '/event_notification', event_data )
+  with UserOption( 'min_num_identifier_candidate_chars', 4 ):
+    event_data = BuildRequest( contents = 'foo foogoo gooo',
+                               event_name = 'FileReadyToParse' )
+    app.post_json( '/event_notification', event_data )
 
-  completion_data = BuildRequest( contents = 'oo', column_num = 3 )
-  response = app.post_json( '/completions',
-                            completion_data ).json[ 'completions' ]
+    completion_data = BuildRequest( contents = 'oo', column_num = 3 )
+    response = app.post_json( '/completions',
+                              completion_data ).json[ 'completions' ]
 
-  assert_that( response,
-               contains_inanyorder( CompletionEntryMatcher( 'foogoo' ),
-                                    CompletionEntryMatcher( 'gooo' ) ) )
+    assert_that( response,
+                 contains_inanyorder( CompletionEntryMatcher( 'foogoo' ),
+                                      CompletionEntryMatcher( 'gooo' ) ) )
 
 
 @SharedYcmd
@@ -238,22 +240,6 @@ def GetCompletions_IdentifierCompleter_JustFinishedIdentifier_test( app ):
                has_items( CompletionEntryMatcher( 'foo' ) ) )
 
 
-@IsolatedYcmd
-def GetCompletions_IdentifierCompleter_IgnoreFinishedIdentifierInString_test(
-  app ):
-
-  event_data = BuildRequest( event_name = 'CurrentIdentifierFinished',
-                             column_num = 6,
-                             contents = '"foo"' )
-
-  app.post_json( '/event_notification', event_data )
-
-  completion_data = BuildRequest( contents = 'oo', column_num = 3 )
-  results = app.post_json( '/completions',
-                           completion_data ).json[ 'completions' ]
-  assert_that( results, empty() )
-
-
 @SharedYcmd
 def GetCompletions_IdentifierCompleter_IdentifierUnderCursor_test( app ):
   event_data = BuildRequest( event_name = 'InsertLeave',
@@ -266,21 +252,6 @@ def GetCompletions_IdentifierCompleter_IdentifierUnderCursor_test( app ):
                            completion_data ).json[ 'completions' ]
   assert_that( results,
                has_items( CompletionEntryMatcher( 'foo' ) ) )
-
-
-@IsolatedYcmd
-def GetCompletions_IdentifierCompleter_IgnoreCursorIdentifierInString_test(
-  app ):
-
-  event_data = BuildRequest( event_name = 'InsertLeave',
-                             column_num = 3,
-                             contents = '"foo"' )
-  app.post_json( '/event_notification', event_data )
-
-  completion_data = BuildRequest( contents = 'oo', column_num = 3 )
-  results = app.post_json( '/completions',
-                           completion_data ).json[ 'completions' ]
-  assert_that( results, empty() )
 
 
 @SharedYcmd
@@ -308,40 +279,43 @@ def GetCompletions_UltiSnipsCompleter_Works_test( app ):
   )
 
 
-@IsolatedYcmd( { 'use_ultisnips_completer': 0 } )
+@SharedYcmd
 def GetCompletions_UltiSnipsCompleter_UnusedWhenOffWithOption_test( app ):
-  event_data = BuildRequest(
-    event_name = 'BufferVisit',
-    ultisnips_snippets = [
-        {'trigger': 'foo', 'description': 'bar'},
-        {'trigger': 'zoo', 'description': 'goo'},
-    ] )
+  with UserOption( 'use_ultisnips_completer', False ):
+    event_data = BuildRequest(
+      event_name = 'BufferVisit',
+      ultisnips_snippets = [
+          {'trigger': 'foo', 'description': 'bar'},
+          {'trigger': 'zoo', 'description': 'goo'},
+      ] )
 
-  app.post_json( '/event_notification', event_data )
+    app.post_json( '/event_notification', event_data )
 
-  completion_data = BuildRequest( contents = 'oo ', column_num = 3 )
+    completion_data = BuildRequest( contents = 'oo ', column_num = 3 )
 
-  eq_( [],
-       app.post_json( '/completions',
-                      completion_data ).json[ 'completions' ] )
+    eq_( [],
+         app.post_json( '/completions',
+                        completion_data ).json[ 'completions' ] )
 
 
-@IsolatedYcmd( { 'semantic_triggers': { 'dummy_filetype': [ '_' ] } } )
+@SharedYcmd
 @patch( 'ycmd.tests.test_utils.DummyCompleter.CandidatesList',
         return_value = [ 'some_candidate' ] )
 def GetCompletions_SemanticCompleter_WorksWhenTriggerIsIdentifier_test(
   app, *args ):
-  with PatchCompleter( DummyCompleter, 'dummy_filetype' ):
-    completion_data = BuildRequest( filetype = 'dummy_filetype',
-                                    contents = 'some_can',
-                                    column_num = 9 )
+  with UserOption( 'semantic_triggers',
+                   { 'dummy_filetype': [ '_' ] } ):
+    with PatchCompleter( DummyCompleter, 'dummy_filetype' ):
+      completion_data = BuildRequest( filetype = 'dummy_filetype',
+                                      contents = 'some_can',
+                                      column_num = 9 )
 
-    results = app.post_json( '/completions',
-                             completion_data ).json[ 'completions' ]
-    assert_that(
-      results,
-      has_items( CompletionEntryMatcher( 'some_candidate' ) )
-    )
+      results = app.post_json( '/completions',
+                               completion_data ).json[ 'completions' ]
+      assert_that(
+        results,
+        has_items( CompletionEntryMatcher( 'some_candidate' ) )
+      )
 
 
 @SharedYcmd

@@ -24,8 +24,8 @@ class TestSpeed(TestCase):
                 for i in range(number):
                     func(self)
                 single_time = (time.time() - first) / number
-                message = 'speed issue %s, %s' % (func, single_time)
-                assert single_time < time_per_run, message
+                print('\nspeed', func, single_time)
+                assert single_time < time_per_run
             return wrapper
         return decorated
 
@@ -51,19 +51,3 @@ class TestSpeed(TestCase):
         with open('speed/precedence.py') as f:
             line = len(f.read().splitlines())
         assert jedi.Script(line=line, path='speed/precedence.py').goto_definitions()
-
-    @_check_speed(0.1)
-    def test_no_repr_computation(self):
-        """
-        For Interpreter completion aquisition of sourcefile can trigger
-        unwanted computation of repr(). Exemple : big pandas data.
-        See issue #919.
-        """
-        class SlowRepr():
-            "class to test what happens if __repr__ is very slow."
-            def some_method(self):
-                pass
-            def __repr__(self):
-                time.sleep(0.2)
-        test = SlowRepr()
-        jedi.Interpreter('test.som', [locals()]).completions()

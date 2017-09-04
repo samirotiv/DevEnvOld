@@ -59,13 +59,8 @@ namespace Mono.CompilerServices.SymbolWriter
 
 		public void MarkSequencePoint (int offset, SourceFileEntry file, int line, int column, bool is_hidden)
 		{
-			MarkSequencePoint (offset, file, line, column, -1, -1, is_hidden);
-		}
-
-		public void MarkSequencePoint (int offset, SourceFileEntry file, int line, int column, int end_line, int end_column, bool is_hidden)
-		{
 			int file_idx = file != null ? file.Index : 0;
-			var lne = new LineNumberEntry (file_idx, line, column, end_line, end_column, offset, is_hidden);
+			var lne = new LineNumberEntry (file_idx, line, column, offset, is_hidden);
 
 			if (method_lines.Count > 0) {
 				var prev = method_lines[method_lines.Count - 1];
@@ -100,7 +95,7 @@ namespace Mono.CompilerServices.SymbolWriter
 			int parent = CurrentBlock != null ? CurrentBlock.Index : -1;
 
 			CodeBlockEntry block = new CodeBlockEntry (
-				_blocks.Count, parent, type, start_offset);
+				_blocks.Count + 1, parent, type, start_offset);
 
 			_block_stack.Push (block);
 			_blocks.Add (block);

@@ -7,7 +7,7 @@
 .. _paste: http://pythonpaste.org/modules/evalexception.html
 .. _pylons: http://pylonshq.com/
 .. _gevent: http://www.gevent.org/
-.. _compression: https://github.com/bottlepy/bottle/issues/92
+.. _compression: https://github.com/defnull/bottle/issues/92
 .. _GzipFilter: http://www.cherrypy.org/wiki/GzipFilter
 .. _cherrypy: http://www.cherrypy.org
 .. _heroku: http://heroku.com
@@ -41,9 +41,6 @@ There is no built-in support for sessions because there is no *right* way to do 
       return 'Test counter: %d' % s['test']
 
     bottle.run(app=app)
-
-WARNING: Beaker's SessionMiddleware is not thread safe.  If two concurrent requests modify the same session at the same time, one of the updates might get lost. For this reason, sessions should only be populated once and treated as a read-only store after that. If you find yourself updating sessions regularly, and don't want to risk loosing any updates, think about using a real database instead or seek alternative session middleware libraries.
-
 
 Debugging with Style: Debugging Middleware
 --------------------------------------------------------------------------------
@@ -86,23 +83,6 @@ Test script::
 
 In the example the Bottle route() method is never executed - only index() is tested.
 
-If the code being tested requires access to ``bottle.request`` you can mock it using `Boddle <https://github.com/keredson/boddle>`_::
-
-    import bottle
-    
-    @bottle.route('/')
-    def index():
-        return 'Hi %s!' % bottle.request.params['name']
-
-Test script::
-
-    import mywebapp
-    from boddle import boddle
-    
-    def test_webapp_index():
-        with boddle(params={'name':'Derek'}):
-            assert mywebapp.index() == 'Hi Derek!'
-
 
 Functional Testing Bottle Applications
 --------------------------------------------------------------------------------
@@ -121,11 +101,11 @@ Example using `WebTest <http://webtest.pythonpaste.org/>`_ and `Nose <http://rea
 
         assert app.get('/admin').status == '200 OK'        # fetch a page successfully
 
-        assert app.get('/logout').status_code = 200        # log out
+        app.get('/logout')                                 # log out
         app.reset()                                        # drop the cookie
 
         # fetch the same page, unsuccessfully
-        assert app.get('/admin', expect_errors=True).status == '401 Unauthorized'
+        assert app.get('/admin').status == '401 Unauthorized'
 
 
 Embedding other WSGI Apps
@@ -136,7 +116,7 @@ This is not the recommend way (you should use a middleware in front of bottle to
     from bottle import request, response, route
     subproject = SomeWSGIApplication()
 
-    @route('/subproject/<subpath:re:.*>', method='ANY')
+    @route('/subproject/:subpath#.*#', method='ANY')
     def call_wsgi(subpath):
         new_environ = request.environ.copy()
         new_environ['SCRIPT_NAME'] = new_environ.get('SCRIPT_NAME','') + '/subproject'
@@ -159,7 +139,7 @@ For Bottle, ``/example`` and ``/example/`` are two different routes [1]_. To tre
     @route('/test/')
     def test(): return 'Slash? no?'
 
-add a WSGI middleware that strips trailing slashes from all URLs::
+or add a WSGI middleware that strips trailing slashes from all URLs::
 
     class StripPathMiddleware(object):
       def __init__(self, app):
@@ -171,12 +151,6 @@ add a WSGI middleware that strips trailing slashes from all URLs::
     app = bottle.app()
     myapp = StripPathMiddleware(app)
     bottle.run(app=myapp)
-
-or add a ``before_request`` hook to strip the trailing slashes::
-
-    @hook('before_request')
-    def strip_path():
-        request.environ['PATH_INFO'] = request.environ['PATH_INFO'].rstrip('/')
 
 .. rubric:: Footnotes
 
@@ -275,7 +249,7 @@ section of the `Getting Started with Python on Heroku/Cedar
 
     @route("/")
     def hello_world():
-        return "Hello World!"
+            return "Hello World!"
 
     run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 

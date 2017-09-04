@@ -18,6 +18,8 @@
 #ifndef IDENTIFIERDATABASE_H_ZESX3CVR
 #define IDENTIFIERDATABASE_H_ZESX3CVR
 
+#include <boost/utility.hpp>
+
 #include <unordered_map>
 #include <memory>
 #include <mutex>
@@ -51,11 +53,9 @@ FiletypeIdentifierMap;
 // mutexes are used correctly to protect concurrent access.
 //
 // This class is thread-safe.
-class IdentifierDatabase {
+class IdentifierDatabase : boost::noncopyable {
 public:
   IdentifierDatabase();
-  IdentifierDatabase( const IdentifierDatabase& ) = delete;
-  IdentifierDatabase& operator=( const IdentifierDatabase& ) = delete;
 
   void AddIdentifiers( const FiletypeIdentifierMap &filetype_identifier_map );
 

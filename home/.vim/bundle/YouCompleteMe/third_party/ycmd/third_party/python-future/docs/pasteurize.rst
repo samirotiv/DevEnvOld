@@ -6,7 +6,6 @@
 Running ``pasteurize -w mypy3module.py`` turns this Python 3 code::
     
     import configparser
-    import copyreg
     
     class Blah:
         pass
@@ -19,7 +18,6 @@ into this code which runs on both Py2 and Py3::
     standard_library.install_hooks()
     
     import configparser
-    import copyreg
 
     class Blah(object):
         pass
@@ -29,13 +27,6 @@ Notice that both ``futurize`` and ``pasteurize`` create explicit new-style
 classes that inherit from ``object`` on both Python versions, and both 
 refer to stdlib modules (as well as builtins) under their Py3 names.
 
-Note also that the ``configparser`` module is a special case; there is a full
-backport available on PyPI (https://pypi.python.org/pypi/configparser), so, as
-of v0.16.0, ``python-future`` no longer provides a ``configparser`` package
-alias. To use the resulting code on Py2, install the ``configparser`` backport
-with ``pip install configparser`` or by adding it to your ``requirements.txt``
-file.
-
 ``pasteurize`` also handles the following Python 3 features:
 
 - keyword-only arguments
@@ -43,5 +34,6 @@ file.
 - extended tuple unpacking (PEP 3132)
 
 To handle function annotations (PEP 3107), see :ref:`func_annotations`.
+
 
 
